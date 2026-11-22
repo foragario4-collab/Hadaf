@@ -80,7 +80,7 @@ half4 main(float2 fc){
     if(dir.y>.002){
       float t0=1.0/dir.y; float t1=min(2.6/dir.y,t0+9.);
       float dt=(t1-t0)/uSteps;
-      float tt=t0+dt*hash(fc+fract(uTime));
+      float tt=t0+dt*fract(52.9829189*fract(dot(fc,float2(.06711056,.00583715))));
       float T=1.; float3 acc=float3(0.);
       float cosT=dot(dir,sunDir);
       float hgF=(1.-.62*.62)/pow(1.+.62*.62-2.*.62*cosT,1.5);
@@ -113,7 +113,9 @@ half4 main(float2 fc){
         tt+=dt;
       }
       float far=smoothstep(2.,12.,t0);
-      col=col*T+mix(acc,(1.-T)*mix(uHor,uMid,.35),far*.75);
+      float3 cc=col*T+mix(acc,(1.-T)*mix(uHor,uMid,.35),far*.75);
+      // knapp über dem Horizont weich ausblenden (dort entstanden Streifen und Einzelpixel)
+      col=mix(col*(1.-uCloud*.25)+mix(uHor,uMid,.35)*uCloud*.25,cc,smoothstep(.004,.07,dir.y));
     }
   }
   // Nebel
@@ -125,7 +127,7 @@ half4 main(float2 fc){
   for(int i=0;i<3;i++){float fi=float(i);
     float2 rp=p; rp.x+=rp.y*(.06+.16*uWind+fi*.03);
     rp*=float2(55.+fi*50.,1.6+fi*.7); rp.y+=uTime*(6.+fi*3.);
-    float2 id=floor(rp); float2 f=fract(rp); float r=hash(id+fi*13.);
+    float2 id=mod(floor(rp),289.); float2 f=fract(rp); float r=hash(id+fi*13.);
     float len=.35+.4*hash(id+3.);
     rain+=step(.88,r)*smoothstep(.16,0.,abs(f.x-.5))*smoothstep(1.-len,1.,f.y)*smoothstep(1.,.92,f.y)*(.18+.24*fi)*step(fi*.34,uRain);}
   col=mix(col,col*.82+float3(.04,.05,.07),min(uRain,1.)*.5);
@@ -134,13 +136,13 @@ half4 main(float2 fc){
   float snow=0.;
   for(int i=0;i<3;i++){float fi=float(i);
     float2 s2=p*(9.-fi*3.); s2.y+=uTime*(.18+fi*.14); s2.x+=sin(uTime*.6+s2.y*1.1+fi*2.)*.3;
-    float2 id=floor(s2); float2 f=fract(s2); float2 c=float2(.5)+(float2(hash(id+1.),hash(id+2.))-.5)*.6;
+    float2 id=mod(floor(s2),289.); float2 f=fract(s2); float2 c=float2(.5)+(float2(hash(id+1.),hash(id+2.))-.5)*.6;
     float size=.05+fi*.04; float soft=.02+fi*.05;
     snow+=smoothstep(size+soft,size*.3,length(f-c))*step(.55,hash(id+fi))*(.55+.2*fi);}
   col=mix(col,col*.92+float3(.05),uSnow*.4);
   col+=float3(.95,.97,1.)*snow*uSnow;
   col+=float3(.5,.56,.78)*uFlash*(.05+.18*exp(-length(p-float2(uFlashPos.x*asp,uFlashPos.y))*1.8));
-  col+=(hash(fc+uTime)-.5)/255.;
+  col+=(hash(fc+fract(uTime))-.5)/255.;
   return half4(half3(col),1.);
 }
 """

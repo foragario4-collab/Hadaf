@@ -143,6 +143,9 @@ fun rememberSky(now: Long): SkyInfo {
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
             var last = 0L
             var lastCloud = 0L
+            // Zeit klein halten: große Werte (Handy lange an) machen den Shader ungenau -> Pixelfehler
+            var t0 = -1L
+            val seed = (System.currentTimeMillis() / 1000L % 600L).toFloat()
             var nextBolt = System.currentTimeMillis() + 2500
             var late = 0; var count = 0
             while (true) {
@@ -154,7 +157,9 @@ fun rememberSky(now: Long): SkyInfo {
                         if (last > 0) { count++; if (ms - last > target * 2) late++ }
                         if (count >= 60) { if (late > 18 && SkyQuality.level > 1) SkyQuality.level--; late = 0; count = 0 }
                         last = ms
-                        if (!reduceMotion) time.floatValue = ms / 1000f
+                        if (t0 < 0L) t0 = ms
+                        val secs = seed + ((ms - t0) % 7_200_000L) / 1000f
+                        if (!reduceMotion) time.floatValue = secs
                         val wall = System.currentTimeMillis()
                         val sz = size.value
                         if (st.thunder && wall > nextBolt && sz.width > 0f) {
@@ -167,7 +172,7 @@ fun rememberSky(now: Long): SkyInfo {
                         val cloudEvery = if (SkyQuality.level >= 2) 100L else 200L
                         if (ms - lastCloud >= cloudEvery || flash.floatValue > 0.02f) {
                             lastCloud = ms
-                            if (!reduceMotion) cloudTime.floatValue = ms / 1000f
+                            if (!reduceMotion) cloudTime.floatValue = secs
                             tick.intValue++
                         }
                     }
@@ -315,8 +320,9 @@ private fun ShaderSky(info: SkyInfo, wPx: Float, hPx: Float, blur: Boolean) {
                 scaleX = scale, scaleY = scale, transformOrigin = TransformOrigin(0f, 0f),
                 // Ergebnis bleibt als Bild erhalten und wird nur beim nächsten Takt neu gerechnet
                 compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen,
-                renderEffect = if (blur && Build.VERSION.SDK_INT >= 31)
-                    androidx.compose.ui.graphics.BlurEffect(5f, 5f, androidx.compose.ui.graphics.TileMode.Clamp) else null
+                // scharfer Himmel: hauchdünn weichzeichnen, damit beim Hochskalieren kein Pixelrauschen bleibt
+                renderEffect = if (Build.VERSION.SDK_INT >= 31)
+                    androidx.compose.ui.graphics.BlurEffect(if (blur) 5f else 0.9f, if (blur) 5f else 0.9f, androidx.compose.ui.graphics.TileMode.Clamp) else null
             )
     ) {
         @Suppress("UNUSED_VARIABLE") val tk = info.tick.intValue  // nur bei neuem Takt neu zeichnen

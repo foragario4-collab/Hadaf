@@ -62,7 +62,7 @@ import kotlin.math.sin
 private val GREEN = Color(0xFF34C759)
 private val ORANGE = Color(0xFFFF9F0A)
 
-/** Qibla-Tab: runder Kompass im Apple-Stil oder eckige Leiste mit Karte. */
+/** Qibla-Tab: eckige Leiste oben, runder Kompass im Apple-Stil darunter. */
 @Composable
 fun QiblaScreen(v: Int) {
     val p = LocalPal.current
@@ -119,16 +119,13 @@ fun QiblaScreen(v: Int) {
         if (aligned) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
     }
     val lowAcc = hasSensor && accuracy <= SensorManager.SENSOR_STATUS_ACCURACY_LOW
-    val style = Prefs.compassStyle
     val bgColor = if (p.dark) Color.Black else p.bg
 
     Column(Modifier.fillMaxSize().background(bgColor).padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 12.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Txt(t("tab_qibla"), 34, FontWeight.Bold)
-                Txt(t("mecca_km", "%,d".format(dist.roundToInt()).replace(',', ' ')), 13, color = p.sub)
-            }
-            Segmented(listOf(t("style_round"), t("style_square")), style) { Prefs.compassStyle = it }
+        // Titel mittig; Leiste oben, runder Kompass darunter – beides auf einer Seite
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Txt(t("tab_qibla"), 28, FontWeight.Bold, align = TextAlign.Center)
+            Txt(t("mecca_km", "%,d".format(dist.roundToInt()).replace(',', ' ')), 13, color = p.sub, align = TextAlign.Center)
         }
 
         AnimatedVisibility(visible = lowAcc) {
@@ -161,16 +158,10 @@ fun QiblaScreen(v: Int) {
             }
         }
 
-        if (style == 0) {
-            RoundCompass(az, bearing, diff, aligned, hasSensor, Modifier.weight(1f))
-        } else {
-            Spacer(Modifier.height(12.dp))
-            BarCompass(az, bearing, diff, aligned, hasSensor)
-            Spacer(Modifier.height(12.dp))
-            Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(22.dp))) {
-                MapScreen(v)
-            }
-        }
+        Spacer(Modifier.height(14.dp))
+        BarCompass(az, bearing, diff, aligned, hasSensor)
+        Spacer(Modifier.height(8.dp))
+        RoundCompass(az, bearing, diff, aligned, hasSensor, Modifier.weight(1f))
     }
 }
 
@@ -260,19 +251,31 @@ private fun RoundCompass(az: Float, bearing: Double, diff: Double, aligned: Bool
                         )
                     }
                 }
-                drawLine(sub, Offset(c.x - r * 0.12f, c.y), Offset(c.x + r * 0.12f, c.y), strokeWidth = r * 0.008f)
-                drawLine(sub, Offset(c.x, c.y - r * 0.12f), Offset(c.x, c.y + r * 0.12f), strokeWidth = r * 0.008f)
+                // Blickrichtung in Grad mittig im Kreis
+                val degPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    textAlign = Paint.Align.CENTER
+                    textSize = r * 0.26f
+                    color = fg.toArgb()
+                    typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
+                }
+                val degTxt = if (hasSensor) "${az.roundToInt() % 360}°" else "–"
+                drawIntoCanvas {
+                    it.nativeCanvas.drawText(degTxt, c.x, c.y - (degPaint.ascent() + degPaint.descent()) / 2f, degPaint)
+                }
             }
         }
-        Txt(if (hasSensor) "${az.roundToInt() % 360}°" else "–", 64, FontWeight.Light, align = TextAlign.Center)
-        Txt(Qibla.direction(az.toDouble()), 17, FontWeight.Medium, p.sub, align = TextAlign.Center)
-        Spacer(Modifier.height(12.dp))
-        Box(
+        Spacer(Modifier.height(8.dp))
+        Row(
             Modifier
                 .clip(RoundedCornerShape(18.dp))
-                .background(if (aligned) GREEN.copy(alpha = 0.18f) else p.card)
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) { Txt(statusText(hasSensor, aligned, diff), 15, FontWeight.SemiBold, if (aligned) GREEN else p.text) }
+                .background(if (!hasSensor) p.card else if (aligned) GREEN.copy(alpha = 0.18f) else ORANGE.copy(alpha = 0.16f))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (hasSensor) Box(Modifier.size(8.dp).clip(CircleShape).background(if (aligned) GREEN else ORANGE))
+            Txt(statusText(hasSensor, aligned, diff), 15, FontWeight.SemiBold, if (!hasSensor) p.text else if (aligned) GREEN else ORANGE)
+        }
         Spacer(Modifier.height(4.dp))
         Txt("${t("tab_qibla")} ${bearing.roundToInt()}° · ${Qibla.direction(bearing)}", 13, color = p.sub, align = TextAlign.Center)
     }
@@ -287,10 +290,10 @@ private fun BarCompass(az: Float, bearing: Double, diff: Double, aligned: Boolea
     val qColor by animateColorAsState(if (!hasSensor) p.sub else if (aligned) GREEN else ORANGE, label = "q")
     val topColor by animateColorAsState(if (aligned) GREEN else p.text, label = "top")
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.card)) {
-        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
                 Txt(t("heading"), 12, FontWeight.SemiBold, p.sub)
-                Txt(if (hasSensor) "${az.roundToInt() % 360}°" else "–", 40, FontWeight.Light)
+                Txt(if (hasSensor) "${az.roundToInt() % 360}°" else "–", 32, FontWeight.Light)
             }
             Column(horizontalAlignment = Alignment.End) {
                 Txt(t("qibla_up"), 12, FontWeight.SemiBold, p.sub)
@@ -333,14 +336,6 @@ private fun BarCompass(az: Float, bearing: Double, diff: Double, aligned: Boolea
             drawLine(qColor, Offset(w / 2f + rel * ppd, 0f), Offset(w / 2f + rel * ppd, base + 2f), strokeWidth = 8f, cap = StrokeCap.Round)
             drawLine(topColor, Offset(w / 2f, 0f), Offset(w / 2f, base + 2f), strokeWidth = 8f, cap = StrokeCap.Round)
         }
-        Box(Modifier.fillMaxWidth().height(0.5.dp).background(p.line))
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (aligned) GREEN else qColor))
-            Txt(statusText(hasSensor, aligned, diff), 15, FontWeight.SemiBold, if (aligned) GREEN else p.text)
-        }
+        Spacer(Modifier.height(4.dp))
     }
 }

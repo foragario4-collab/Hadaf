@@ -242,9 +242,15 @@ object Mosques {
         return System.currentTimeMillis() - lkAt > 30L * 24 * 3600_000L || landkarte.isNullOrEmpty()
     }
 
+    private val lkWaiting = ArrayList<(Boolean) -> Unit>()
+    private val mwWaiting = ArrayList<(Boolean) -> Unit>()
+
     fun refreshLandkarte(ctx: Context, cb: (Boolean) -> Unit) {
-        if (lkLoading) return
-        lkLoading = true
+        synchronized(lkWaiting) {
+            lkWaiting.add(cb)
+            if (lkLoading) return
+            lkLoading = true
+        }
         val app = ctx.applicationContext
         val main = Handler(Looper.getMainLooper())
         Thread {
@@ -287,8 +293,13 @@ object Mosques {
                 lkAt = System.currentTimeMillis()
                 landkarte = out
             }
-            lkLoading = false
-            main.post { cb(anyOk) }
+            val cbs = synchronized(lkWaiting) {
+                lkLoading = false
+                val l = ArrayList(lkWaiting)
+                lkWaiting.clear()
+                l
+            }
+            main.post { cbs.forEach { it(anyOk) } }
         }.start()
     }
 
@@ -381,8 +392,11 @@ object Mosques {
     }
 
     fun refreshMawaqit(ctx: Context, lat: Double, lng: Double, cb: (Boolean) -> Unit) {
-        if (mwLoading) return
-        mwLoading = true
+        synchronized(mwWaiting) {
+            mwWaiting.add(cb)
+            if (mwLoading) return
+            mwLoading = true
+        }
         val app = ctx.applicationContext
         val main = Handler(Looper.getMainLooper())
         Thread {
@@ -407,8 +421,13 @@ object Mosques {
             } catch (e: Exception) {
                 false
             }
-            mwLoading = false
-            main.post { cb(ok) }
+            val cbs = synchronized(mwWaiting) {
+                mwLoading = false
+                val l = ArrayList(mwWaiting)
+                mwWaiting.clear()
+                l
+            }
+            main.post { cbs.forEach { it(ok) } }
         }.start()
     }
 
@@ -686,9 +705,15 @@ object Mosques {
         return distance(lat, lng, centerLat, centerLng) > 15_000f
     }
 
+    /** Wer während eines laufenden Ladevorgangs fragt, bekommt das Ergebnis trotzdem (sonst bliebe „Wird geladen …“ stehen). */
+    private val waiting = ArrayList<(Boolean) -> Unit>()
+
     fun refresh(ctx: Context, lat: Double, lng: Double, cb: (Boolean) -> Unit) {
-        if (loading) return
-        loading = true
+        synchronized(waiting) {
+            waiting.add(cb)
+            if (loading) return
+            loading = true
+        }
         val app = ctx.applicationContext
         val main = Handler(Looper.getMainLooper())
         Thread {
@@ -712,8 +737,13 @@ object Mosques {
             } catch (e: Exception) {
                 false
             }
-            loading = false
-            main.post { cb(ok) }
+            val cbs = synchronized(waiting) {
+                loading = false
+                val l = ArrayList(waiting)
+                waiting.clear()
+                l
+            }
+            main.post { cbs.forEach { it(ok) } }
         }.start()
     }
 
@@ -727,11 +757,12 @@ object Mosques {
 
     private fun fetchOsm(lat: Double, lng: Double): List<Mosque> {
         val a = "(around:25000,$lat,$lng)"
-        val q = "[out:json][timeout:40];(" +
-            "nwr[\"amenity\"=\"place_of_worship\"][\"religion\"=\"muslim\"]$a;" +
+        // Namenssuche ist für die Server sehr aufwendig – nur im näheren Umkreis (10 km), sonst Zeitüberschreitung
+        val n = "(around:10000,$lat,$lng)"
+        val q = "[out:json][timeout:30];(" +
             "nwr[\"religion\"=\"muslim\"]$a;" +
             "nwr[\"building\"=\"mosque\"]$a;" +
-            "nwr[\"name\"~\"Moschee|Mosque|Masjid|Mesjid|Mescid|Camii|Cami|Džamija|Dzamija|Musalla|Mussala|Gebetsraum|Islamisch|Islamic|Islamski\",i]$a;" +
+            "nwr[\"name\"~\"Moschee|Mosque|Masjid|Mesjid|Mescid|Camii|Cami|Džamija|Dzamija|Musalla|Mussala|Gebetsraum|Islamisch|Islamic|Islamski\",i]$n;" +
             ");out center tags;"
         val body = overpass(q)
         val els = JSONObject(body).getJSONArray("elements")
@@ -825,38 +856,62 @@ object Mosques {
         "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
     )
 
-    /** Fragt nacheinander mehrere Overpass-Server, bis einer antwortet. */
+    /**
+     * Fragt mehrere Overpass-Server gestaffelt: der erste sofort, jeder weitere, falls nach 6 s noch keine
+     * gültige Antwort da ist. Die erste gültige Antwort gewinnt, die anderen Anfragen werden abgebrochen.
+     */
     private fun overpass(q: String): String {
-        var last: Exception? = null
-        var anyReached = false
-        for (server in overpassServers) {
-            try {
-                val conn = URL(server).openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.doOutput = true
-                conn.connectTimeout = 12_000
-                conn.readTimeout = 45_000
-                conn.setRequestProperty("User-Agent", UA)
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-                conn.outputStream.use { it.write(("data=" + URLEncoder.encode(q, "UTF-8")).toByteArray()) }
-                val code = conn.responseCode
-                anyReached = true
-                if (code == 200) {
-                    val body = conn.inputStream.bufferedReader().use { it.readText() }
-                    conn.disconnect()
-                    if (body.trimStart().startsWith("{")) {
-                        lastError = null
-                        return body
+        val result = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val reached = java.util.concurrent.atomic.AtomicBoolean(false)
+        val done = java.util.concurrent.CountDownLatch(1)
+        val left = java.util.concurrent.atomic.AtomicInteger(overpassServers.size)
+        val conns = java.util.concurrent.ConcurrentLinkedQueue<HttpURLConnection>()
+        val data = ("data=" + URLEncoder.encode(q, "UTF-8")).toByteArray()
+        overpassServers.forEachIndexed { i, server ->
+            Thread {
+                try {
+                    if (i > 0 && done.await(i * 6L, java.util.concurrent.TimeUnit.SECONDS)) return@Thread
+                    val conn = URL(server).openConnection() as HttpURLConnection
+                    conns.add(conn)
+                    conn.requestMethod = "POST"
+                    conn.doOutput = true
+                    conn.connectTimeout = 10_000
+                    conn.readTimeout = 40_000
+                    conn.setRequestProperty("User-Agent", UA)
+                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                    conn.outputStream.use { it.write(data) }
+                    val code = conn.responseCode
+                    reached.set(true)
+                    if (code == 200) {
+                        val body = conn.inputStream.bufferedReader().use { it.readText() }
+                        if (validOverpass(body) && result.compareAndSet(null, body)) done.countDown()
                     }
-                } else {
                     conn.disconnect()
+                } catch (e: Exception) {
+                } finally {
+                    if (left.decrementAndGet() == 0) done.countDown()
                 }
-            } catch (e: Exception) {
-                last = e
-            }
+            }.start()
         }
-        lastError = if (anyReached) "busy" else "offline"
-        throw last ?: Exception("Overpass nicht erreichbar")
+        try { done.await(90, java.util.concurrent.TimeUnit.SECONDS) } catch (e: InterruptedException) { }
+        // übrige Anfragen beenden
+        conns.forEach { try { it.disconnect() } catch (e: Exception) { } }
+        val r = result.get()
+        if (r != null) {
+            lastError = null
+            return r
+        }
+        lastError = if (reached.get()) "busy" else "offline"
+        throw Exception("Overpass nicht erreichbar")
+    }
+
+    /** Gültige Antwort? Bei Überlastung schicken die Server oft „200“ mit Fehlerhinweis und unvollständiger Liste. */
+    private fun validOverpass(body: String): Boolean = try {
+        val o = JSONObject(body)
+        val rem = o.optString("remark").lowercase()
+        o.has("elements") && !(rem.contains("error") || rem.contains("timed out") || rem.contains("out of memory"))
+    } catch (e: Exception) {
+        false
     }
 
     // ---------------- Adresse → Position (OpenStreetMap Nominatim) ----------------

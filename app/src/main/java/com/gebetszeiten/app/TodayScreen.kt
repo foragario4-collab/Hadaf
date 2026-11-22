@@ -121,7 +121,7 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
         Mosques.distance(Prefs.lat, Prefs.lng, Prefs.lastGpsLat, Prefs.lastGpsLng) > 50_000f
     // Glasflächen, die gerade nicht sichtbar sind, aus dem Unschärfe-Bereich entfernen
     androidx.compose.runtime.SideEffect {
-        val keep = buildSet { add("list"); if (isToday) add("fav") else add("todaypill"); if (awayShown) add("away") }
+        val keep = buildSet { add("list"); add("datepill"); if (isToday) add("fav"); if (awayShown) add("away") }
         reg.rects.keys.retainAll(keep)
     }
     Box(Modifier.fillMaxSize().onGloballyPositioned { reg.origin = it.positionInRoot() }) {
@@ -134,40 +134,68 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
             ) {
                 val small = maxHeight < 700.dp
                 Column(Modifier.fillMaxSize()) {
-                    // Kopf: Tag zurück · Datum + Ort/Wetter · Tag vor · Einstellungen
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SkyIconButton(Glyph.CHEV_L, fg) { offset-- }
-                        Column(Modifier.weight(1f).padding(horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Kopf: alles mittig – Ort, Wetter und Datum in einer Glas-Kapsel mit Pfeilen für die Tage
+                    val ts = { size: Int, w: FontWeight -> androidx.compose.ui.text.TextStyle(fontSize = size.sp, fontWeight = w, shadow = shadow) }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        // links: zurück zu heute (nur wenn ein anderer Tag gezeigt wird), sonst gleich breiter Platzhalter
+                        Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
+                            if (!isToday) SkyIconButton(Glyph.RESET, fg) { offset = 0 }
+                        }
+                        Row(
+                            Modifier.weight(1f).padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            GlyphIcon(Glyph.PIN, fg, 15.dp)
+                            Spacer(Modifier.width(5.dp))
                             androidx.compose.material3.Text(
-                                DateText.headerTop(dayMs) + " · " + Hijri.text(dayMs), color = fg.copy(alpha = 0.92f), maxLines = 1,
-                                style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, shadow = shadow)
-                            )
-                            androidx.compose.material3.Text(
-                                listOfNotNull(Prefs.place, wx?.temp?.let { "$it°" }, wx?.label()).joinToString(" · "),
-                                color = fg, maxLines = 1,
-                                style = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, shadow = shadow)
+                                Prefs.place, color = fg, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                style = ts(17, FontWeight.SemiBold).copy(letterSpacing = (-0.1).sp)
                             )
                         }
-                        SkyIconButton(Glyph.CHEV_R, fg) { offset++ }
-                        Spacer(Modifier.width(6.dp))
                         SkyIconButton("M4 7h10M18 7h2M4 17h4M12 17h8M16 5a2 2 0 1 0 0 4a2 2 0 1 0 0-4zM10 15a2 2 0 1 0 0 4a2 2 0 1 0 0-4z", fg, onClick = onSettings)
                     }
-                    if (!isToday) {
-                        Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
-                            Row(
-                                Modifier.glass(reg, "todaypill", 17.dp, tint).tap { offset = 0 }.padding(horizontal = 14.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                    if (wx != null) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 1.dp),
+                            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            GlyphIcon(wxGlyph(wx, sky.st.night), fg.copy(alpha = 0.92f), 16.dp)
+                            Spacer(Modifier.width(6.dp))
+                            androidx.compose.material3.Text(
+                                listOfNotNull(wx.temp?.let { "$it°" }, wx.label()).joinToString(" · "),
+                                color = fg.copy(alpha = 0.92f), maxLines = 1, style = ts(13, FontWeight.Medium)
+                            )
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().padding(top = if (small) 8.dp else 12.dp), contentAlignment = Alignment.Center) {
+                        Row(
+                            Modifier.widthIn(max = 360.dp).glass(reg, "datepill", 23.dp, tint).padding(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            PillChevron(Glyph.CHEV_L) { offset-- }
+                            Column(
+                                Modifier.weight(1f, fill = false).padding(horizontal = 10.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                GlyphIcon(Glyph.RESET, Color.White, 14.dp)
-                                Spacer(Modifier.width(6.dp))
-                                Txt(t("tab_today"), 14, FontWeight.SemiBold, Color.White)
+                                androidx.compose.material3.Text(
+                                    DateText.headerMain(dayMs), color = Color.White, maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    style = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                )
+                                DateText.headerLine2(dayMs)?.let {
+                                    androidx.compose.material3.Text(
+                                        it, color = Color.White.copy(alpha = 0.8f), maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        style = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                                    )
+                                }
                             }
+                            PillChevron(Glyph.CHEV_R) { offset++ }
                         }
                     }
                     Spacer(Modifier.weight(1f))
                     // Mitte: nächstes Gebet groß (heute) bzw. Titel des gewählten Tages
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        val ts = { size: Int, w: FontWeight -> androidx.compose.ui.text.TextStyle(fontSize = size.sp, fontWeight = w, shadow = shadow) }
                         if (isToday) {
                             androidx.compose.material3.Text(t("next_up").uppercase(), color = fg.copy(alpha = 0.9f), style = ts(13, FontWeight.SemiBold).copy(letterSpacing = 1.5.sp))
                             androidx.compose.material3.Text(next.title, color = fg, style = ts(if (small) 32 else 40, FontWeight.Bold), maxLines = 1)
@@ -208,7 +236,7 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                         list.forEachIndexed { i, e ->
                             GlassPrayerRow(
                                 ctx, e, first = i == 0, isNext = isToday && e == next, past = isToday && e.at <= now,
-                                nextIn = if (isToday && e == next) Fmt.countdown(next.at - now) else null, small = small
+                                nextIn = if (isToday && e.at > now) WidgetPainter.cd(e.at - now) else null, small = small
                             )
                         }
                     }
@@ -216,6 +244,26 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
             }
         }
     }
+}
+
+/** Pfeil in der Datums-Kapsel. */
+@Composable
+private fun PillChevron(path: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)).tap(scale = 0.9f, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { GlyphIcon(path, Color.White, 16.dp) }
+}
+
+/** Wettersymbol passend zum echten Wetter (nachts Mond statt Sonne). */
+private fun wxGlyph(w: Wx, night: Boolean): String = when {
+    w.thunder -> Glyph.WX_THUNDER
+    w.snow && w.rain > 0.03f -> Glyph.WX_SNOW
+    w.rain > 0.03f -> Glyph.WX_RAIN
+    w.fog > 0.5f -> Glyph.WX_FOG
+    w.cloud > 0.5f -> Glyph.WX_CLOUD
+    night -> Glyph.WX_MOON
+    else -> Glyph.WX_SUN
 }
 
 @Composable

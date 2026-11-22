@@ -40,7 +40,7 @@ internal object SkyImage {
             val rw = (w / 2).coerceAtLeast(1)
             val rh = (h / 2).coerceAtLeast(1)
             shader.setFloatUniform("uRes", rw.toFloat(), rh.toFloat())
-            shader.setFloatUniform("uTime", ((now / 60_000L) % 100_000L) * 0.8f)
+            shader.setFloatUniform("uTime", ((now / 60_000L) % 1440L) * 0.8f)
             shader.setFloatUniform("uTop", st.top[0], st.top[1], st.top[2])
             shader.setFloatUniform("uMid", st.mid[0], st.mid[1], st.mid[2])
             shader.setFloatUniform("uHor", st.hor[0], st.hor[1], st.hor[2])
@@ -95,6 +95,13 @@ internal object SkyImage {
             img.close()
             hb.close()
             soft?.let { small ->
+                // leicht weichzeichnen, damit beim Hochskalieren kein Pixelrauschen entsteht
+                val sp = IntArray(rw * rh)
+                small.getPixels(sp, 0, rw, 0, 0, rw, rh)
+                val tp = IntArray(sp.size)
+                boxH(sp, tp, rw, rh, 1)
+                boxV(tp, sp, rw, rh, 1)
+                small.setPixels(sp, 0, rw, 0, 0, rw, rh)
                 val big = Bitmap.createScaledBitmap(small, w, h, true)
                 if (big != small) small.recycle()
                 big

@@ -211,4 +211,21 @@ object DateText {
         d(now).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(loc()))
 
     fun headerSub(now: Long): String? = if (Prefs.dateMode == 1) null else Hijri.text(now)
+
+    /** Kopf der Startseite, Zeile 1: „Sonntag, 22. November“ (anderes Jahr: mit Jahr) bzw. Hijri-Datum. */
+    fun headerMain(now: Long): String {
+        if (Prefs.dateMode == 0) return Hijri.text(now)
+        val day = d(now)
+        val other = day.year != java.time.LocalDate.now(Times.zone()).year
+        val pat = when (Prefs.lang) {
+            Lang.DE -> if (other) "EEEE, d. MMMM yyyy" else "EEEE, d. MMMM"
+            Lang.EN -> if (other) "EEEE, MMMM d, yyyy" else "EEEE, MMMM d"
+            Lang.ZH -> if (other) "yyyy年M月d日 EEEE" else "M月d日 EEEE"
+            else -> if (other) "EEEE, d MMMM yyyy" else "EEEE, d MMMM"
+        }
+        return day.format(DateTimeFormatter.ofPattern(pat, loc())).replaceFirstChar { it.titlecase(loc()) }
+    }
+
+    /** Kopf der Startseite, Zeile 2: Hijri-Datum, wenn beide Kalender gewählt sind. */
+    fun headerLine2(now: Long): String? = if (Prefs.dateMode == 2) Hijri.text(now) else null
 }
