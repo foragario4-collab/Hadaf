@@ -54,6 +54,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.withStyle
@@ -159,16 +160,108 @@ fun BoxScope.MosqueBottomSheet(
     val listMaxPx = maxOf(peekPx + 1f, if (parentPx > 0f) parentPx * 0.86f else with(density) { 420.dp.toPx() })
     // Moschee angetippt: halb offen (Route + Zeiten) oder ganz hochgezogen (alles auf einem Bildschirm)
     val fullPx = maxOf(peekPx + 1f, if (parentPx > 0f) parentPx - with(density) { 6.dp.toPx() } else with(density) { 640.dp.toPx() })
-    val midPx = maxOf(peekPx + 1f, minOf(fullPx - 1f, if (parentPx > 0f) parentPx * 0.70f else with(density) { 460.dp.toPx() }))
+    // Halb offen ist genau so hoch wie Kopf + Inhalt der halben Ansicht – kein leerer Platz darunter
+    var headerPx by remember { mutableFloatStateOf(0f) }
+    var halfPx by remember(selected?.id) { mutableFloatStateOf(0f) }
+    val midPx = maxOf(
+        peekPx + 1f,
+        minOf(
+            fullPx - 1f,
+            if (halfPx > 0f && headerPx > 0f) headerPx + halfPx
+            else if (parentPx > 0f) parentPx * 0.70f else with(density) { 460.dp.toPx() }
+        )
+    )
     val maxPx = if (selected != null) fullPx else listMaxPx
     val h = remember { Animatable(peekPx) }
-
-    // Beim Antippen einer Moschee: Blatt halb hoch (Route und Zeiten im Blick)
-    LaunchedEffect(selected?.id) {
-        if (selected != null) h.animateTo(midPx, spring(dampingRatio = 0.85f, stiffness = 380f))
-        else if (h.value > listMaxPx) h.animateTo(listMaxPx, spring(dampingRatio = 0.85f))
-    }
     val full = selected != null && h.value > (midPx + fullPx) / 2f
+
+    // Beim Antippen einer Moschee: Blatt halb hoch (Route und Zeiten im Blick); passt sich der gemessenen Höhe an
+    LaunchedEffect(selected?.id, midPx) {
+        if (selected != null) {
+            if (!full) h.animateTo(midPx, spring(dampingRatio = 0.85f, stiffness = 380f))
+        } else if (h.value > listMaxPx) {
+            h.animateTo(listMaxPx, spring(dampingRatio = 0.85f))
+        }
+    }
+
+    /** Einrasten nach dem Ziehen – vom Kopf aus oder aus dem Inhalt heraus (velocity > 0 = nach unten). */
+    suspend fun settle(velocity: Float) {
+        if (selected != null) {
+            // halb ↔ ganz; weit nach unten gewischt = schließen
+            val v = h.value
+            when {
+                velocity > 1400f && v < midPx -> onClose()
+                v < midPx - with(density) { 110.dp.toPx() } -> onClose()
+                velocity < -600f -> h.animateTo(fullPx, spring(dampingRatio = 0.85f))
+                velocity > 600f -> h.animateTo(midPx, spring(dampingRatio = 0.85f))
+                v > (midPx + fullPx) / 2f -> h.animateTo(fullPx, spring(dampingRatio = 0.85f))
+                else -> h.animateTo(midPx, spring(dampingRatio = 0.85f))
+            }
+        } else {
+            val target = when {
+                velocity < -600f -> maxPx
+                velocity > 600f -> peekPx
+                h.value > (peekPx + maxPx) / 2f -> maxPx
+                else -> peekPx
+            }
+            h.animateTo(target, spring(dampingRatio = 0.85f))
+        }
+    }
+
+    // Ziehen aus dem Inhalt heraus: erst das Blatt hoch bis ganz oben, dann scrollt der Inhalt.
+    // Nach unten: erst der Inhalt bis oben, dann geht das Blatt mit nach unten.
+    val lowPx = peekPx
+    val sheetScroll = remember(selected?.id, maxPx, lowPx, midPx, fullPx) {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            var cur = Float.NaN
+            var moved = false
+            private fun move(to: Float) {
+                cur = to
+                moved = true
+                scope.launch { h.snapTo(to) }
+            }
+
+            override fun onPreScroll(
+                available: androidx.compose.ui.geometry.Offset,
+                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+            ): androidx.compose.ui.geometry.Offset {
+                if (source != androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) return androidx.compose.ui.geometry.Offset.Zero
+                val dy = available.y
+                val base = if (cur.isNaN()) h.value else cur
+                if (dy < 0f && base < maxPx - 0.5f) {
+                    val nv = (base - dy).coerceAtMost(maxPx)
+                    move(nv)
+                    return androidx.compose.ui.geometry.Offset(0f, -(nv - base))
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: androidx.compose.ui.geometry.Offset,
+                available: androidx.compose.ui.geometry.Offset,
+                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+            ): androidx.compose.ui.geometry.Offset {
+                if (source != androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) return androidx.compose.ui.geometry.Offset.Zero
+                val dy = available.y
+                val base = if (cur.isNaN()) h.value else cur
+                if (dy > 0f && base > lowPx + 0.5f) {
+                    val nv = (base - dy).coerceAtLeast(lowPx)
+                    move(nv)
+                    return androidx.compose.ui.geometry.Offset(0f, base - nv)
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                val wasMoved = moved
+                cur = Float.NaN
+                moved = false
+                if (!wasMoved) return androidx.compose.ui.unit.Velocity.Zero
+                settle(available.y)
+                return available
+            }
+        }
+    }
 
     val evs = remember(now / 60_000L) { Times.around(now) }
     val sortMode = Prefs.sortMode
@@ -228,38 +321,19 @@ fun BoxScope.MosqueBottomSheet(
             .shadow(10.dp, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
             .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
             .background(p.card)
+            .nestedScroll(sheetScroll)
     ) {
         // Griff + Kopf: ziehen oder antippen
         Column(
             Modifier
                 .fillMaxWidth()
+                .onSizeChanged { headerPx = it.height.toFloat() }
                 .draggable(
                     orientation = Orientation.Vertical,
                     state = rememberDraggableState { delta ->
                         scope.launch { h.snapTo((h.value - delta).coerceIn(peekPx, maxPx)) }
                     },
-                    onDragStopped = { velocity ->
-                        if (selected != null) {
-                            // halb ↔ ganz; weit nach unten gewischt = schließen
-                            val v = h.value
-                            when {
-                                velocity > 1400f && v < midPx -> onClose()
-                                v < midPx - with(density) { 110.dp.toPx() } -> onClose()
-                                velocity < -600f -> h.animateTo(fullPx, spring(dampingRatio = 0.85f))
-                                velocity > 600f -> h.animateTo(midPx, spring(dampingRatio = 0.85f))
-                                v > (midPx + fullPx) / 2f -> h.animateTo(fullPx, spring(dampingRatio = 0.85f))
-                                else -> h.animateTo(midPx, spring(dampingRatio = 0.85f))
-                            }
-                        } else {
-                            val target = when {
-                                velocity < -600f -> maxPx
-                                velocity > 600f -> peekPx
-                                h.value > (peekPx + maxPx) / 2f -> maxPx
-                                else -> peekPx
-                            }
-                            h.animateTo(target, spring(dampingRatio = 0.85f))
-                        }
-                    }
+                    onDragStopped = { velocity -> settle(velocity) }
                 )
                 .tap { if (selected == null) toggle() else scope.launch { h.animateTo(if (full) midPx else fullPx, spring(dampingRatio = 0.85f)) } }
                 .then(if (selected == null) Modifier.height(peekDp) else Modifier)
@@ -369,12 +443,12 @@ fun BoxScope.MosqueBottomSheet(
             val expand = { scope.launch { h.animateTo(fullPx, spring(dampingRatio = 0.85f)) }; Unit }
             val place = remember(selected.id, now / 60_000L) { Places.get(ctx, selected.id) }
             if (place != null) {
-                PlaceDetailNew(place, selected, now, lat, lng, routeSec[selected.id], full, expand) {
+                PlaceDetailNew(place, selected, now, lat, lng, routeSec[selected.id], full, expand, onHalfHeight = { halfPx = it }) {
                     Places.delete(ctx, selected.id)
                     onHide(selected)
                 }
             } else {
-                MosqueDetailNew(selected, evs, now, lat, lng, routeSec[selected.id], full, expand, onUpdated, onHide, onMove)
+                MosqueDetailNew(selected, evs, now, lat, lng, routeSec[selected.id], full, expand, onUpdated, onHide, onMove, onHalfHeight = { halfPx = it })
             }
         }
     }

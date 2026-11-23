@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -326,7 +327,8 @@ internal fun TimesCard(m: Mosque, evs: List<Ev>, now: Long, focus: MosqueFocus?,
 @Composable
 internal fun MosqueDetailNew(
     m: Mosque, evs: List<Ev>, now: Long, myLat: Double, myLng: Double, listSec: Int?, full: Boolean,
-    onExpand: () -> Unit, onUpdated: (Mosque) -> Unit, onHide: (Mosque) -> Unit, onMove: (Mosque) -> Unit
+    onExpand: () -> Unit, onUpdated: (Mosque) -> Unit, onHide: (Mosque) -> Unit, onMove: (Mosque) -> Unit,
+    onHalfHeight: (Float) -> Unit = {}
 ) {
     val p = LocalPal.current
     val ctx = LocalContext.current
@@ -421,7 +423,10 @@ internal fun MosqueDetailNew(
     }
 
     Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+            // volle Höhe des Inhalts (halbe Ansicht) melden – danach richtet sich die Höhe des halb offenen Blatts
+            .onSizeChanged { if (!full) onHalfHeight(it.height.toFloat()) }
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(if (full) 9.dp else 10.dp)
     ) {
         BigRoute(m, tr, full) { info = t("no_nav") }
@@ -967,7 +972,7 @@ private fun openNow(hours: String, now: Long): Boolean? {
 @Composable
 internal fun PlaceDetailNew(
     pl: Place, m: Mosque, now: Long, myLat: Double, myLng: Double, listSec: Int?, full: Boolean,
-    onExpand: () -> Unit, onDelete: () -> Unit
+    onExpand: () -> Unit, onHalfHeight: (Float) -> Unit = {}, onDelete: () -> Unit
 ) {
     val p = LocalPal.current
     var info by remember(m.id) { mutableStateOf<String?>(null) }
@@ -976,7 +981,9 @@ internal fun PlaceDetailNew(
     val tr = Routing.minutes(listSec, dist, Prefs.travelMode)
     val c = routeColor(m)
     Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+            .onSizeChanged { if (!full) onHalfHeight(it.height.toFloat()) }
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         BigRoute(m, tr, full) { info = t("no_nav") }
