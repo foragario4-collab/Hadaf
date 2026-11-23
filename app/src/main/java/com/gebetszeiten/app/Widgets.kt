@@ -160,18 +160,12 @@ object Widgets {
         val evs = Times.around(now)
         val dist = Mosques.distance(Prefs.lat, Prefs.lng, m.lat, m.lng)
         val travel = travelMin(dist, Prefs.travelMode)
-        val niq = nextIqamah(m, evs, now, now + travel * 60_000L)
-        val p = niq?.first ?: evs.first { it.at > now && it.kind.prayer }
-        val adhan = niq?.second ?: Fmt.time(p.at)
-        val adhanMs = try {
-            val parts = adhan.split(":")
-            p.day.atTime(parts[0].toInt(), parts[1].toInt()).atZone(Times.zone()).toInstant().toEpochMilli()
-        } catch (e: Exception) {
-            p.at
-        }
+        val f = mosqueFocus(m, evs, now) ?: return WidgetPainter.Fav(NameFmt.name(m.name), "", "–", null, null, travel)
+        val after = if (f.phase == 2 && f.nextTitle != null && f.nextAdhanMs != null)
+            f.nextTitle + " · " + t("mq_adhan_in", WidgetPainter.cd(f.nextAdhanMs - now)) else null
         return WidgetPainter.Fav(
-            NameFmt.name(m.name), "${WidgetPainter.short(p)} · ${t("adhan")}".uppercase(),
-            adhan, adhanMs, niq?.third, travel
+            NameFmt.name(m.name), "${WidgetPainter.short(f.ev)} · ${t("adhan")}".uppercase(),
+            f.adhanTxt, f.adhanMs, f.iqMs, travel, f.phase, after
         )
     }
 

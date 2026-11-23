@@ -185,7 +185,13 @@ internal object WidgetPainter {
         return Chain(ch, ch[ni - 1], ch[ni])
     }
 
-    class Fav(val name: String, val adhanLabel: String, val adhan: String, val adhanMs: Long?, val iq: Long?, val travel: Int)
+    class Fav(
+        val name: String, val adhanLabel: String, val adhan: String, val adhanMs: Long?, val iq: Long?, val travel: Int,
+        /** 0 vor Adhan, 1 bis Iqamah, 2 Iqamah verpasst, 3 begonnen ohne Iqamah */
+        val phase: Int = 0,
+        /** bei „verpasst“: „Asr · Adhan in 1:52“ */
+        val after: String? = null
+    )
 
     // ---------- Widgets ----------
 
@@ -396,11 +402,12 @@ internal object WidgetPainter {
         }
         val adhanRest = fav.adhanMs?.let { if (it > now) cd(it - now) else t("w_begun") } ?: ""
         panel(r1, fav.adhanLabel, pk, fav.adhan, pt, adhanRest)
-        panel(r2, t("iqamah").uppercase(), pkG, fav.iq?.let { Fmt.time(it) } ?: "–", ptG, fav.iq?.let { if (it > now) cd(it - now) else t("w_begun") } ?: "")
+        panel(r2, t("iqamah").uppercase(), pkG, fav.iq?.let { Fmt.time(it) } ?: "–", ptG, fav.iq?.let { if (it > now) cd(it - now) else t("w_missed") } ?: "")
         y += ph + 8f * u
         // Leiste „Losfahren bis …“ – grün, rot wenn es zu spät ist
-        val leave = fav.iq?.let { it - fav.travel * 60_000L }
-        val late = leave != null && leave < now
+        val missed = fav.phase == 2
+        val leave = (fav.iq ?: fav.adhanMs)?.let { it - fav.travel * 60_000L }
+        val late = missed || (leave != null && leave < now)
         val bar = RectF(14f * u, y, w - 14f * u, 0f)
         val pb = pen.paint(13f, 700, if (late) 0xFFFFD5D0.toInt() else 0xFFC8FFD5.toInt())
         bar.bottom = y + 12f * u + pen.lineH(pb) + 2f * u
@@ -410,7 +417,11 @@ internal object WidgetPainter {
         fill.style = Paint.Style.STROKE; fill.strokeWidth = u
         fill.color = if (late) 0x66FFAAA0 else 0x668EF0A8
         pen.c.drawRoundRect(RectF(bar.left + u / 2, bar.top + u / 2, bar.right - u / 2, bar.bottom - u / 2), 12f * u, 12f * u, fill)
-        val parts = if (leave != null) listOf(t("leave_by", Fmt.time(leave)), "·", Fmt.duration(fav.travel * 60_000L)) else listOf(t("no_times"))
+        val parts = when {
+            missed -> listOf(t("w_missed").replaceFirstChar { it.titlecase() } + (fav.after?.let { " · $it" } ?: ""))
+            leave != null -> listOf(t("leave_by", Fmt.time(leave)), "·", Fmt.duration(fav.travel * 60_000L))
+            else -> listOf(t("no_times"))
+        }
         val g = 10f * u
         var tot = parts.sumOf { pen.width(it, pb).toDouble() }.toFloat() + g * (parts.size - 1)
         while (tot > bar.width() - 20f * u && pb.textSize > 9f * u) {

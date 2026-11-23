@@ -37,7 +37,7 @@ import androidx.compose.ui.window.Dialog
 
 private fun modeLabels() = listOf(t("mode_off"), t("mode_tone_long"), t("mode_adhan"))
 
-private fun displayName(ctx: Context, uri: Uri): String = try {
+internal fun displayName(ctx: Context, uri: Uri): String = try {
     ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
         if (it.moveToFirst()) it.getString(0) else null
     } ?: "Audio"
@@ -45,7 +45,7 @@ private fun displayName(ctx: Context, uri: Uri): String = try {
     "Audio"
 }
 
-private fun keep(ctx: Context, uri: Uri) {
+internal fun keep(ctx: Context, uri: Uri) {
     try {
         ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
     } catch (e: Exception) {

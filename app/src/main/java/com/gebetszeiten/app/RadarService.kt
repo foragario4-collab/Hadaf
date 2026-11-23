@@ -171,40 +171,48 @@ class RadarService : Service(), LocationListener {
             nameTxt = NameFmt.name(m.name)
             metaTxt = "${Mosques.fmtDist(d)} · ${Fmt.duration(travel * 60_000L)}"
             val arr = now + travel * 60_000L
-            val niq = nextIqamah(m, evs, now, arr)
-            val p = niq?.first ?: evs.firstOrNull { it.at > now && it.kind.prayer } ?: next
-            val adhanTxt = niq?.second ?: Fmt.time(p.at)
-            val adhanMs = try {
-                val parts = adhanTxt.split(":")
-                p.day.atTime(parts[0].toInt(), parts[1].toInt()).atZone(Times.zone()).toInstant().toEpochMilli()
-            } catch (e: Exception) {
-                p.at
-            }
-            line1 = if (niq != null) "${p.title} $adhanTxt · ${t("iqamah")} ${Fmt.time(niq.third)}"
-            else "${p.title} $adhanTxt"
+            // gleiche Phasen wie „Meine Moschee“: Adhan in … → Iqamah in … → Iqamah verpasst (bis 30 Min vor dem nächsten Adhan)
+            val f = mosqueFocus(m, evs, now)
+            val p = f?.ev ?: next
+            val adhanTxt = f?.adhanTxt ?: Fmt.time(p.at)
+            val adhanMs = f?.adhanMs ?: p.at
+            val iqMs = f?.iqMs
+            val missed = f?.phase == 2
+            val after = if (f != null && f.nextTitle != null && f.nextAdhanMs != null)
+                f.nextTitle + " · " + t("mq_adhan_in", WidgetPainter.cd(f.nextAdhanMs - now)) else null
+            line1 = if (f != null) "${p.title} · ${f.statusText(now)}" else "${p.title} $adhanTxt"
             aLabel = "${p.title} · ADHAN".uppercase()
             aTime = adhanTxt
             aIn = if (adhanMs > now) t("in_time", Fmt.duration(adhanMs - now)) else t("started")
             iLabel = t("iqamah").uppercase()
             arrText = t("arrival", Fmt.time(arr))
-            if (niq != null) {
-                iTime = Fmt.time(niq.third)
-                iIn = if (niq.third > now) t("in_time", Fmt.duration(niq.third - now)) else t("started")
-                val df = (niq.third - arr) / 60_000L
-                late = df < 0
-                diffText = if (df >= 0) t("diff_before", Fmt.duration(df * 60_000L)) else t("diff_after", Fmt.duration(-df * 60_000L))
+            if (iqMs != null) {
+                iTime = Fmt.time(iqMs)
+                iIn = if (iqMs > now) t("in_time", Fmt.duration(iqMs - now)) else t("w_missed")
+                if (missed) {
+                    late = true
+                    arrText = f!!.statusText(now)
+                    diffText = after ?: ""
+                } else {
+                    val df = (iqMs - arr) / 60_000L
+                    late = df < 0
+                    diffText = if (df >= 0) t("diff_before", Fmt.duration(df * 60_000L)) else t("diff_after", Fmt.duration(-df * 60_000L))
+                }
             }
             big.append(period).append('\n')
-            if (niq != null) {
+            if (iqMs != null && !missed) {
                 big.append(
                     t(
                         "radar_next_line", p.title, adhanTxt, Fmt.duration((adhanMs - now).coerceAtLeast(0)),
-                        Fmt.time(niq.third), Fmt.duration((niq.third - now).coerceAtLeast(0))
+                        Fmt.time(iqMs), Fmt.duration((iqMs - now).coerceAtLeast(0))
                     )
                 ).append('\n')
-                val diff = (niq.third - arr) / 60_000L
+                val diff = (iqMs - arr) / 60_000L
                 big.append(t("arrival", Fmt.time(arr))).append(" · ")
                     .append(if (diff >= 0) t("diff_before", Fmt.duration(diff * 60_000L)) else t("diff_after", Fmt.duration(-diff * 60_000L)))
+            } else if (missed) {
+                big.append("${p.title} · ${f!!.statusText(now)}")
+                after?.let { big.append('\n').append(it) }
             } else {
                 big.append("${p.title} $adhanTxt · ${t("in_time", Fmt.duration((adhanMs - now).coerceAtLeast(0)))}").append('\n')
                     .append(t("arrival", Fmt.time(arr)))

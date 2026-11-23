@@ -197,8 +197,18 @@ object Mosques {
             better.none { distance(it.lat, it.lng, o.lat, o.lng) < 80f }
         }.map { o -> ov[o.id]?.let { o.copy(iqamah = it) } ?: o }
         val ac = addrCache ?: emptyMap<String, String>()
+        // berechnete Zeiten des Tages (Minuten) – nur nötig, wenn eine Iqamah als „+N Min nach Adhan“ eingetragen ist
+        val calc: () -> Map<String, Int> = {
+            val today = Times.today(System.currentTimeMillis())
+            val m = Times.events(today, 1).filter { it.day == today && it.kind.prayer }.associate { e ->
+                val z = java.time.Instant.ofEpochMilli(e.at).atZone(Times.zone())
+                e.kind.name to (z.hour * 60 + z.minute)
+            }
+            m + ("JUMUAH" to (m["DHUHR"] ?: 0))
+        }
         return (better + fromOsm).distinctBy { it.id }
             .map { m -> if (m.address.isBlank() && ac[m.id] != null) m.copy(address = ac[m.id]!!) else m }
+            .map { m -> MosqueExtra.apply(ctx, m, calc) }
     }
 
     // ---------------- Islam-Landkarte (Universität Wien) ----------------
@@ -351,6 +361,7 @@ object Mosques {
         val moved = if (m.custom) m.copy(lat = lat, lng = lng)
         else m.copy(id = "own-" + m.id, lat = lat, lng = lng, custom = true)
         if (!m.custom) Prefs.hide(m.id)
+        MosqueExtra.moveId(ctx, m.id, moved.id)
         addOwn(ctx, moved)
         return moved
     }
@@ -614,6 +625,13 @@ object Mosques {
         saveOwn(ctx)
     }
 
+    /** Link einer eigenen Moschee entfernen (Zeiten von der Seite fallen mit weg, eigene Korrekturen bleiben). */
+    fun removeLink(ctx: Context, m: Mosque): Mosque {
+        val n = m.copy(url = null, source = "Eigene", adhan = emptyMap(), iqamah = emptyMap(), fetchedAt = 0L)
+        if (m.custom) addOwn(ctx, n)
+        return n
+    }
+
     fun removeOwn(ctx: Context, id: String) {
         list(ctx)
         own?.removeAll { it.id == id }
@@ -631,6 +649,12 @@ object Mosques {
             overrides?.put(id, iq)
         }
         saveOwn(ctx)
+    }
+
+    /** Alte, von Hand gesetzte Iqamah-Zeiten (frühere Version) entfernen. */
+    fun clearIqamahOverride(ctx: Context, id: String) {
+        list(ctx)
+        if (overrides?.remove(id) != null) saveOwn(ctx)
     }
 
     // ---------------- Hilfen ----------------
@@ -812,6 +836,7 @@ object Mosques {
             adhan = d.adhan, iqamah = if (d.iqamah.isNotEmpty()) d.iqamah else m.iqamah,
             custom = true, fetchedAt = System.currentTimeMillis()
         )
+        MosqueExtra.moveId(ctx, m.id, newM.id)
         addOwn(ctx, newM)
         return newM
     }

@@ -198,10 +198,10 @@ fun SkyBackground(info: SkyInfo, modifier: Modifier = Modifier) {
         val density = LocalDensity.current
         val wPx = with(density) { maxWidth.toPx() }
         val hPx = with(density) { maxHeight.toPx() }
+        // Grundfarbe immer darunter: falls die Himmels-Ebene am Rand nicht ganz deckt, ist dort Himmel statt Schwarz
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(st.top[0], st.top[1], st.top[2]), Color(st.mid[0], st.mid[1], st.mid[2]), Color(st.hor[0], st.hor[1], st.hor[2])))))
         if (Build.VERSION.SDK_INT >= 33 && SkyQuality.level > 0 && SkyShader.ok()) {
             ShaderSky(info, wPx, hPx, blur = false)
-        } else {
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(st.top[0], st.top[1], st.top[2]), Color(st.mid[0], st.mid[1], st.mid[2]), Color(st.hor[0], st.hor[1], st.hor[2])))))
         }
         SkyParticles(info)
         Canvas(Modifier.fillMaxSize()) {
@@ -215,20 +215,6 @@ fun SkyBackground(info: SkyInfo, modifier: Modifier = Modifier) {
                 drawPath(path, Color(0xFFBECDFF).copy(alpha = 0.35f * v * wgt), style = Stroke(width = 14f * wgt, cap = StrokeCap.Round, join = StrokeJoin.Round))
                 drawPath(path, Color(0xFFDDE4FF).copy(alpha = 0.6f * v * wgt), style = Stroke(width = 6f * wgt, cap = StrokeCap.Round, join = StrokeJoin.Round))
                 drawPath(path, Color.White.copy(alpha = v * (0.6f + 0.4f * wgt)), style = Stroke(width = 2.4f * wgt + 0.6f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-            }
-        }
-        val sky = remember { PathParser().parsePathString(SKYLINE).toPath() }
-        Canvas(Modifier.fillMaxSize()) {
-            val sc = this.size.width / 390f
-            val skyCol = if (st.night) Color(0xFF0A0F22) else if (st.dusk) Color(0xFF2A2340) else Color(0xFF24324F)
-            val tr = androidx.compose.ui.graphics.Matrix().apply { translate(0f, this@Canvas.size.height - 120f * sc); scale(sc, sc) }
-            val p2 = Path().apply { addPath(sky); transform(tr) }
-            drawPath(p2, skyCol)
-            if (st.night || st.dusk) {
-                val wc = Color(0xFFFFD27A).copy(alpha = 0.85f + 0.15f * sin(info.time.floatValue * 1.3f))
-                listOf(168f to 83f, 176f to 83f, 184f to 83f, 55f to 87f, 61f to 87f, 279f to 88f, 285f to 88f, 218f to 34f).forEach { (x, y) ->
-                    drawCircle(wc, 1.8f * sc, Offset(x * sc, this.size.height - (120f - y) * sc))
-                }
             }
         }
     }
@@ -313,9 +299,13 @@ private fun ShaderSky(info: SkyInfo, wPx: Float, hPx: Float, blur: Boolean) {
     val base = if (q >= 2) 2.2f else 3.0f
     val scale = if (blur) base * 1.8f else base
     val density = LocalDensity.current
+    // ganze Pixel und etwas Überstand: sonst bleibt am unteren/rechten Rand eine nicht gezeichnete Zeile,
+    // die hochskaliert als flackernder schwarzer Streifen sichtbar wird
+    val lw = kotlin.math.ceil(wPx / scale).toInt() + 2
+    val lh = kotlin.math.ceil(hPx / scale).toInt() + 2
     Canvas(
         Modifier
-            .size(with(density) { (wPx / scale).toDp() }, with(density) { (hPx / scale).toDp() })
+            .size(with(density) { lw.toDp() }, with(density) { lh.toDp() })
             .graphicsLayer(
                 scaleX = scale, scaleY = scale, transformOrigin = TransformOrigin(0f, 0f),
                 // Ergebnis bleibt als Bild erhalten und wird nur beim nächsten Takt neu gerechnet
@@ -327,7 +317,7 @@ private fun ShaderSky(info: SkyInfo, wPx: Float, hPx: Float, blur: Boolean) {
     ) {
         @Suppress("UNUSED_VARIABLE") val tk = info.tick.intValue  // nur bei neuem Takt neu zeichnen
         val st = info.st
-        shader.setFloatUniform("uRes", size.width, size.height)
+        shader.setFloatUniform("uRes", lw.toFloat(), lh.toFloat())
         shader.setFloatUniform("uTime", info.cloudTime.floatValue)
         shader.setFloatUniform("uTop", st.top[0], st.top[1], st.top[2])
         shader.setFloatUniform("uMid", st.mid[0], st.mid[1], st.mid[2])
@@ -345,7 +335,8 @@ private fun ShaderSky(info: SkyInfo, wPx: Float, hPx: Float, blur: Boolean) {
         shader.setFloatUniform("uSnow", 0f)
         shader.setFloatUniform("uFog", st.fog)
         shader.setFloatUniform("uFlash", info.flash.floatValue)
-        shader.setFloatUniform("uHorizon", 0.12f)
+        // Horizont unter dem unteren Rand (wie bei den Widgets): Himmel und Wolken bis ganz unten, kein dunkler Balken
+        shader.setFloatUniform("uHorizon", -0.06f)
         shader.setFloatUniform("uFlashPos", info.strike.value?.x ?: 0.6f, info.strike.value?.y ?: 0.6f)
         shader.setFloatUniform("uWind", st.wind)
         shader.setFloatUniform("uCloudLit", st.lit[0], st.lit[1], st.lit[2])
@@ -353,7 +344,8 @@ private fun ShaderSky(info: SkyInfo, wPx: Float, hPx: Float, blur: Boolean) {
         shader.setFloatUniform("uSteps", if (blur) 10f else if (q >= 2) 18f else 12f)
         shader.setFloatUniform("uDisc", 1f)
         shader.setFloatUniform("uLight", if (!blur && q >= 2) 1f else 0f)
-        drawRect(brush)
+        // etwas über den Rand hinaus zeichnen, damit jede Zeile der Ebene gefüllt ist
+        drawRect(brush, size = androidx.compose.ui.geometry.Size(size.width + 4f, size.height + 4f))
     }
 }
 

@@ -90,7 +90,10 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
     }
 
     val minute = now / 60_000L
-    val evs = remember(minute, v) { Times.around(now) }
+    // rev: steigt, wenn im Gebets-Blatt etwas geändert wird (z. B. Zeitkorrektur) → Zeiten neu rechnen
+    var rev by remember { mutableIntStateOf(0) }
+    var sheetKind by remember { mutableStateOf<Kind?>(null) }
+    val evs = remember(minute, v, rev) { Times.around(now) }
     val today = Times.today(now)
     val ni = evs.indexOfFirst { it.at > now }.coerceAtLeast(1)
     val next = evs[ni]
@@ -100,7 +103,10 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
     val isToday = offset == 0
     val day = today.plusDays(offset.toLong())
     val dayMs = day.atTime(12, 0).atZone(Times.zone()).toInstant().toEpochMilli()
-    val list = if (isToday) evs.filter { it.day == today } else remember(day, v) { Times.events(day, 1) }
+    val list = if (isToday) evs.filter { it.day == today } else remember(day, v, rev) { Times.events(day, 1) }
+    // Gebete, die heute schon waren: wann sie morgen wiederkommen
+    val tomorrowEvs = remember(today, v, rev) { Times.events(today.plusDays(1), 1) }
+    fun nextOf(e: Ev): Long? = if (e.at > now) e.at else tomorrowEvs.firstOrNull { it.kind == e.kind }?.at?.takeIf { it > now }
     val title = when (offset) {
         0 -> t("today_title")
         1 -> t("tomorrow")
@@ -200,7 +206,7 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                             androidx.compose.material3.Text(t("next_up").uppercase(), color = fg.copy(alpha = 0.9f), style = ts(13, FontWeight.SemiBold).copy(letterSpacing = 1.5.sp))
                             androidx.compose.material3.Text(next.title, color = fg, style = ts(if (small) 32 else 40, FontWeight.Bold), maxLines = 1)
                             androidx.compose.material3.Text(Fmt.countdown(next.at - now), color = fg, style = ts(if (small) 48 else 60, FontWeight.ExtraLight).copy(letterSpacing = (-2).sp), maxLines = 1)
-                            androidx.compose.material3.Text(t("at_time", Fmt.time(next.at)), color = fg.copy(alpha = 0.92f), style = ts(15, FontWeight.Normal))
+                            androidx.compose.material3.Text(if (next.day != today) t("hero_tomorrow", Fmt.time(next.at)) else t("at_time", Fmt.time(next.at)), color = fg.copy(alpha = 0.92f), style = ts(15, FontWeight.Normal))
                             Spacer(Modifier.height(8.dp))
                             Box(Modifier.width(170.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(fg.copy(alpha = 0.25f))) {
                                 Box(Modifier.fillMaxWidth(frac).height(5.dp).clip(RoundedCornerShape(3.dp)).background(fg))
@@ -235,14 +241,21 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                     Column(Modifier.fillMaxWidth().glass(reg, "list", 24.dp, tint)) {
                         list.forEachIndexed { i, e ->
                             GlassPrayerRow(
-                                ctx, e, first = i == 0, isNext = isToday && e == next, past = isToday && e.at <= now,
-                                nextIn = if (isToday && e.at > now) WidgetPainter.cd(e.at - now) else null, small = small
-                            )
+                                e, first = i == 0, isNext = isToday && e == next, past = isToday && e.at <= now,
+                                nextIn = if (isToday) nextOf(e)?.let { WidgetPainter.cd(it - now) } else null,
+                                soon = isToday && e.at > now, small = small
+                            ) { sheetKind = e.kind }
                         }
                     }
                 }
             }
         }
+    }
+
+    // Gebet angetippt: Blatt mit Ton-Einstellungen gleitet hoch
+    sheetKind?.let { k ->
+        val ev = list.firstOrNull { it.kind == k }
+        if (ev != null) PrayerSheet(ev, now, if (isToday) nextOf(ev) else ev.at.takeIf { it > now }, onClose = { sheetKind = null }) { rev++ }
     }
 }
 
@@ -316,21 +329,13 @@ private fun PrayerRow(ctx: Context, e: Ev, first: Boolean, isNext: Boolean, past
  * Antippen wechselt Aus → Ton → Adhan (kurze Bestätigung unten).
  */
 @Composable
-private fun GlassPrayerRow(ctx: Context, e: Ev, first: Boolean, isNext: Boolean, past: Boolean, nextIn: String?, small: Boolean) {
+private fun GlassPrayerRow(e: Ev, first: Boolean, isNext: Boolean, past: Boolean, nextIn: String?, soon: Boolean, small: Boolean, onTap: () -> Unit) {
     val green = Color(0xFF7CF0C8)
     val alpha = if (past && !isNext) 0.55f else 1f
     Column(
         Modifier.fillMaxWidth()
             .background(if (isNext) Color.White.copy(alpha = 0.18f) else Color.Transparent)
-            .tap(scale = 0.99f) {
-                val max = if (e.kind.prayer) 2 else 1
-                if (e.kind == Kind.MIDNIGHT) return@tap
-                val m = (Prefs.mode(e.kind) + 1) % (max + 1)
-                Prefs.setMode(e.kind, m)
-                Scheduler.reschedule(ctx)
-                val label = listOf(t("mode_off"), t("mode_tone"), t("mode_adhan"))[m]
-                android.widget.Toast.makeText(ctx, e.title + ": " + label, android.widget.Toast.LENGTH_SHORT).show()
-            }
+            .tap(scale = 0.99f, onClick = onTap)
     ) {
         if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.12f)))
         Row(
@@ -342,18 +347,24 @@ private fun GlassPrayerRow(ctx: Context, e: Ev, first: Boolean, isNext: Boolean,
                 drawCircle(if (isNext) green else Color.White.copy(alpha = 0.35f * alpha), size.minDimension * 0.22f)
             }
             Spacer(Modifier.width(8.dp))
-            androidx.compose.material3.Text(
-                e.title, color = Color.White.copy(alpha = alpha), maxLines = 1,
-                style = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, fontWeight = if (isNext) FontWeight.Bold else FontWeight.Medium)
-            )
-            if (nextIn != null) {
-                Spacer(Modifier.width(8.dp))
+            // Name und Countdown teilen sich den Platz – die Uhrzeit rechts bleibt immer ganz sichtbar
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material3.Text(
-                    t("in_time", nextIn), color = green, maxLines = 1,
-                    style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    e.title, color = Color.White.copy(alpha = alpha), maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                    style = androidx.compose.ui.text.TextStyle(fontSize = 17.sp, fontWeight = if (isNext) FontWeight.Bold else FontWeight.Medium)
                 )
+                if (nextIn != null) {
+                    Spacer(Modifier.width(8.dp))
+                    androidx.compose.material3.Text(
+                        t("in_time", nextIn), color = if (soon) green else Color.White.copy(alpha = 0.55f), maxLines = 1,
+                        softWrap = false,
+                        style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
+                    )
+                }
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(10.dp))
             androidx.compose.material3.Text(
                 Fmt.time(e.at), color = Color.White.copy(alpha = alpha), maxLines = 1,
                 style = androidx.compose.ui.text.TextStyle(
@@ -430,7 +441,7 @@ private fun SlidersIcon(c: Color) {
 }
 
 
-private data class FavInfo(val name: String, val prayer: String, val iqMs: Long?, val travel: Int)
+private data class FavInfo(val name: String, val focus: MosqueFocus?, val hasTimes: Boolean, val travel: Int)
 
 @Composable
 private fun MyMosqueCard(now: Long, v: Int, onOpenMap: () -> Unit) {
@@ -453,8 +464,7 @@ private fun MyMosqueCard(now: Long, v: Int, onOpenMap: () -> Unit) {
             val sec = Routing.durations(la, lo, listOf(m), Prefs.travelMode)[m.id]
             val travel = Routing.minutes(sec, dist, Prefs.travelMode)
             val t0 = System.currentTimeMillis()
-            val niq = nextIqamah(m, Times.around(t0), t0, t0 + travel * 60_000L)
-            FavInfo(NameFmt.name(m.name), niq?.first?.title ?: "", niq?.third, travel)
+            FavInfo(NameFmt.name(m.name), mosqueFocus(m, Times.around(t0), t0), m.adhan.isNotEmpty() || m.iqamah.isNotEmpty(), travel)
         }
     }
     Column(
@@ -470,24 +480,49 @@ private fun MyMosqueCard(now: Long, v: Int, onOpenMap: () -> Unit) {
         }
         if (i == null) {
             Txt(t("my_mosque_hint"), 13, color = p.sub)
-        } else if (i.iqMs == null) {
+        } else if (!i.hasTimes || i.focus == null) {
             Txt(t("no_times"), 14, color = p.sub)
         } else {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Txt(t("iqamah") + " " + i.prayer, 15, modifier = Modifier.weight(1f))
-                Txt(Fmt.time(i.iqMs), 24, FontWeight.SemiBold, p.accentText)
+            // Phasen: Adhan in … → Iqamah in … → Iqamah verpasst (bis 30 Min vor dem nächsten Adhan)
+            val f = i.focus!!
+            val red = Color(0xFFFF6B5E)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Txt(f.ev.title, 15, FontWeight.SemiBold, maxLines = 1)
+                    Txt(
+                        f.statusText(now), 13, FontWeight.SemiBold,
+                        when (f.phase) { 2 -> red; 3 -> p.sub; else -> p.accentText }, maxLines = 1
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    // groß die Zeit, um die es gerade geht; klein die andere
+                    val bigIq = f.phase >= 1 && f.iqMs != null
+                    Txt(if (bigIq) Fmt.time(f.iqMs ?: f.adhanMs) else f.adhanTxt, 24, FontWeight.SemiBold, if (f.phase == 2) p.sub else p.accentText)
+                    Txt(
+                        if (bigIq) t("adhan") + " " + f.adhanTxt else (f.iqMs?.let { t("iqamah") + " " + Fmt.time(it) } ?: t("adhan")),
+                        12, color = p.sub, maxLines = 1
+                    )
+                }
             }
-            val leave = i.iqMs - i.travel * 60_000L
+            val target = f.iqMs ?: f.adhanMs
+            val leave = target - i.travel * 60_000L
+            val missed = f.phase == 2
             val late = leave < now
-            val c = if (late) Color(0xFFD70015) else Color(0xFF248A3D)
+            val c = if (missed) p.sub else if (late) Color(0xFFD70015) else Color(0xFF248A3D)
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.copy(alpha = 0.13f)).padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Txt(t("leave_by", Fmt.time(leave)), 14, FontWeight.SemiBold, c, Modifier.weight(1f), maxLines = 1)
-                TravelIcon(Prefs.travelMode, c, p.card, 15.dp)
-                Spacer(Modifier.width(4.dp))
-                Txt(Fmt.duration(i.travel * 60_000L), 14, FontWeight.Bold, c)
+                Txt(
+                    if (missed) (f.nextTitle?.let { n -> n + " · " + t("mq_adhan_in", WidgetPainter.cd((f.nextAdhanMs ?: now) - now)) } ?: "")
+                    else t("leave_by", Fmt.time(leave)),
+                    14, FontWeight.SemiBold, c, Modifier.weight(1f), maxLines = 1
+                )
+                if (!missed) {
+                    TravelIcon(Prefs.travelMode, c, p.card, 15.dp)
+                    Spacer(Modifier.width(4.dp))
+                    Txt(Fmt.duration(i.travel * 60_000L), 14, FontWeight.Bold, c)
+                }
             }
         }
     }

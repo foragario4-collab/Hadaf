@@ -17,13 +17,13 @@ Gebetszeiten zeigt dir die Gebetszeiten für deinen Ort, erinnert dich rechtzeit
 - Jede Zeit einzeln um Minuten korrigierbar, Hijri-Datum korrigierbar
 
 ### Die Startseite „Heute“
-- Das nächste Gebet groß mit Countdown, darunter alle Zeiten des Tages
+- Das nächste Gebet groß mit Countdown, darunter alle Zeiten des Tages – jedes mit Countdown, bis es wiederkommt
 - Ein **lebender Himmel**, der dem echten Sonnenstand und dem **echten Wetter** an deinem Ort folgt: Morgenrot zu Fajr, Abendrot zu Maghrib, Sterne in der Nacht, dazu Wolken, Regen, Schnee, Nebel oder Gewitter
 - Alles auf einen Blick, ohne Scrollen
 - „Meine Moschee“: die nächste Iqamah deiner Moschee und wann du spätestens losfahren musst
 
 ### Erinnerungen
-- Für jedes Gebet einzeln: **aus, Ton oder Adhan**
+- Für jedes Gebet einzeln: **aus, Ton oder Adhan** – einfach auf der Startseite das Gebet antippen
 - Eigene Adhan-Aufnahme möglich, auch ein eigener Adhan für Fajr
 - Erinnerung einige Minuten vorher
 - **Live-Countdown** in der Benachrichtigungsleiste bis zum nächsten Gebet
@@ -35,6 +35,9 @@ Gebetszeiten zeigt dir die Gebetszeiten für deinen Ort, erinnert dich rechtzeit
 - **Route** mit einem Tippen in deiner Navigations-App
 - Fotos vom Weg zum Gebetsraum (bis zu 10), damit du den Eingang schneller findest
 - Moschee hinzufügen per Link (Mawaqit, MasjidBox), Adresse oder Punkt auf der Karte
+- **Zeiten selbst ändern** (Adhan und Iqamah, auch „Iqamah 10 Min nach Adhan“) – bleiben beim Neuladen erhalten
+- **Problem melden** mit fertigen Vorschlägen: Zeiten, Ort, Name, Link, Angaben oder Ausblenden
+- Angaben je Moschee: Frauenbereich, Wudu, Parken, Barrierefrei
 - Eigene **Gebets- und Wudu-Plätze** speichern, mit Fotos und Öffnungszeiten
 
 ### Live-Radar

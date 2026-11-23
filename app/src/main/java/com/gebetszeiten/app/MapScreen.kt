@@ -582,7 +582,12 @@ fun MapScreen(v: Int) {
                         reloadList()
                     },
                     onReport = { m -> reportFor = m },
-                    onReload = { reloadList() }
+                    onReload = { reloadList() },
+                    onMove = { m ->
+                        moving = m
+                        selected = null
+                        pickMode = true
+                    }
                 )
             }
         }

@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.withStyle
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import kotlin.math.roundToInt
 
 /** Nächstes Gebet einer Moschee: (Titel, Adhan, Iqamah?) – nutzt die Zeiten der Moschee, falls vorhanden. */
@@ -145,7 +146,8 @@ fun BoxScope.MosqueBottomSheet(
     onUpdated: (Mosque) -> Unit,
     onHide: (Mosque) -> Unit = {},
     onReport: (Mosque) -> Unit = {},
-    onReload: () -> Unit = {}
+    onReload: () -> Unit = {},
+    onMove: (Mosque) -> Unit = {}
 ) {
     val ctx = LocalContext.current
     val p = LocalPal.current
@@ -154,13 +156,19 @@ fun BoxScope.MosqueBottomSheet(
     var parentPx by remember { mutableFloatStateOf(0f) }
     val peekDp = 72.dp
     val peekPx = with(density) { peekDp.toPx() }
-    val maxPx = maxOf(peekPx + 1f, if (parentPx > 0f) parentPx * 0.86f else with(density) { 420.dp.toPx() })
+    val listMaxPx = maxOf(peekPx + 1f, if (parentPx > 0f) parentPx * 0.86f else with(density) { 420.dp.toPx() })
+    // Moschee angetippt: halb offen (Route + Zeiten) oder ganz hochgezogen (alles auf einem Bildschirm)
+    val fullPx = maxOf(peekPx + 1f, if (parentPx > 0f) parentPx - with(density) { 6.dp.toPx() } else with(density) { 640.dp.toPx() })
+    val midPx = maxOf(peekPx + 1f, minOf(fullPx - 1f, if (parentPx > 0f) parentPx * 0.70f else with(density) { 460.dp.toPx() }))
+    val maxPx = if (selected != null) fullPx else listMaxPx
     val h = remember { Animatable(peekPx) }
 
-    // Beim Antippen einer Moschee: Blatt ganz hoch
+    // Beim Antippen einer Moschee: Blatt halb hoch (Route und Zeiten im Blick)
     LaunchedEffect(selected?.id) {
-        if (selected != null) h.animateTo(maxPx, spring(dampingRatio = 0.85f))
+        if (selected != null) h.animateTo(midPx, spring(dampingRatio = 0.85f, stiffness = 380f))
+        else if (h.value > listMaxPx) h.animateTo(listMaxPx, spring(dampingRatio = 0.85f))
     }
+    val full = selected != null && h.value > (midPx + fullPx) / 2f
 
     val evs = remember(now / 60_000L) { Times.around(now) }
     val sortMode = Prefs.sortMode
@@ -231,16 +239,29 @@ fun BoxScope.MosqueBottomSheet(
                         scope.launch { h.snapTo((h.value - delta).coerceIn(peekPx, maxPx)) }
                     },
                     onDragStopped = { velocity ->
-                        val target = when {
-                            velocity < -600f -> maxPx
-                            velocity > 600f -> peekPx
-                            h.value > (peekPx + maxPx) / 2f -> maxPx
-                            else -> peekPx
+                        if (selected != null) {
+                            // halb ↔ ganz; weit nach unten gewischt = schließen
+                            val v = h.value
+                            when {
+                                velocity > 1400f && v < midPx -> onClose()
+                                v < midPx - with(density) { 110.dp.toPx() } -> onClose()
+                                velocity < -600f -> h.animateTo(fullPx, spring(dampingRatio = 0.85f))
+                                velocity > 600f -> h.animateTo(midPx, spring(dampingRatio = 0.85f))
+                                v > (midPx + fullPx) / 2f -> h.animateTo(fullPx, spring(dampingRatio = 0.85f))
+                                else -> h.animateTo(midPx, spring(dampingRatio = 0.85f))
+                            }
+                        } else {
+                            val target = when {
+                                velocity < -600f -> maxPx
+                                velocity > 600f -> peekPx
+                                h.value > (peekPx + maxPx) / 2f -> maxPx
+                                else -> peekPx
+                            }
+                            h.animateTo(target, spring(dampingRatio = 0.85f))
                         }
-                        h.animateTo(target, spring(dampingRatio = 0.85f))
                     }
                 )
-                .tap { if (selected == null) toggle() }
+                .tap { if (selected == null) toggle() else scope.launch { h.animateTo(if (full) midPx else fullPx, spring(dampingRatio = 0.85f)) } }
                 .then(if (selected == null) Modifier.height(peekDp) else Modifier)
                 .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)
         ) {
@@ -252,9 +273,9 @@ fun BoxScope.MosqueBottomSheet(
                     .background(p.line)
             )
             Box(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    if (selected == null) {
+            if (selected == null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
                         val mCount = sorted.count { it.first.category == "Moschee" }
                         val oCount = sorted.size - mCount
                         Txt(
@@ -262,8 +283,16 @@ fun BoxScope.MosqueBottomSheet(
                             18, FontWeight.Bold, maxLines = 1
                         )
                         if (expanded) Txt(t("count_split", mCount, oCount), 13, color = p.sub, maxLines = 1)
-                    } else {
-                        Txt(NameFmt.name(selected.name), 18, FontWeight.Bold, maxLines = 2)
+                    }
+                    Chevron(expanded)
+                }
+            } else {
+                // Kopf: Symbol · Name · Art und Entfernung · (hochgezogen: Stern „Meine Moschee“) · Schließen
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    KindIcon(selected.category, 40.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Txt(NameFmt.name(selected.name), 19, FontWeight.Bold, maxLines = 1)
                         val d = Mosques.distance(lat, lng, selected.lat, selected.lng)
                         Txt(
                             listOf(
@@ -273,19 +302,29 @@ fun BoxScope.MosqueBottomSheet(
                                     Places.CAT_WUDU -> t("kind_wudu")
                                     else -> NameFmt.type(selected.name).ifBlank { t("cat_room") }
                                 },
-                                if (Places.isPlace(selected)) "" else Bezirk.label(selected.address), Mosques.fmtDist(d)
+                                if (full && selected.address.isNotBlank() && !Places.isPlace(selected)) selected.address
+                                else Mosques.fmtDist(d)
                             ).filter { it.isNotBlank() }.joinToString(" · "),
-                            13, color = p.sub, maxLines = 2
+                            13, color = p.sub, maxLines = 1
                         )
                     }
-                }
-                if (selected != null) {
+                    if (full && !Places.isPlace(selected)) {
+                        val fav = Prefs.favId == selected.id
+                        Box(
+                            Modifier.size(32.dp).clip(CircleShape)
+                                .background(if (fav) p.accentText.copy(alpha = 0.18f) else p.fill)
+                                .tap(scale = 0.88f) {
+                                    Prefs.favId = if (fav) "" else selected.id
+                                    Widgets.updateAll(ctx)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) { StarIcon(fav, if (fav) p.accentText else p.sub) }
+                        Spacer(Modifier.width(8.dp))
+                    }
                     Box(
-                        Modifier.size(36.dp).clip(CircleShape).background(p.fill).tap(onClick = onClose),
+                        Modifier.size(32.dp).clip(CircleShape).background(p.fill).tap(onClick = onClose),
                         contentAlignment = Alignment.Center
-                    ) { GlyphIcon(Glyph.CLOSE, p.sub, 14.dp) }
-                } else {
-                    Chevron(expanded)
+                    ) { GlyphIcon(Glyph.CLOSE, p.sub, 13.dp) }
                 }
             }
         }
@@ -327,382 +366,29 @@ fun BoxScope.MosqueBottomSheet(
                 }
             }
         } else if (selected != null) {
-            MosqueDetail(selected, evs, now, lat, lng, routeSec[selected.id], onEdit, onRemove, onUpdated, onHide, onReport)
+            val expand = { scope.launch { h.animateTo(fullPx, spring(dampingRatio = 0.85f)) }; Unit }
+            val place = remember(selected.id, now / 60_000L) { Places.get(ctx, selected.id) }
+            if (place != null) {
+                PlaceDetailNew(place, selected, now, lat, lng, routeSec[selected.id], full, expand) {
+                    Places.delete(ctx, selected.id)
+                    onHide(selected)
+                }
+            } else {
+                MosqueDetailNew(selected, evs, now, lat, lng, routeSec[selected.id], full, expand, onUpdated, onHide, onMove)
+            }
         }
     }
 }
 
+/** Stern für „Meine Moschee“ (gefüllt, wenn gesetzt). */
 @Composable
-private fun MosqueDetail(
-    m: Mosque, evs: List<Ev>, now: Long, myLat: Double, myLng: Double, listSec: Int?,
-    onEdit: (Mosque) -> Unit, onRemove: (Mosque) -> Unit, onUpdated: (Mosque) -> Unit,
-    onHide: (Mosque) -> Unit, onReport: (Mosque) -> Unit
-) {
-    val p = LocalPal.current
-    val ctx = LocalContext.current
-    val today = Times.today(now)
-    val next = evs.firstOrNull { it.at > now && it.kind.prayer }
-    var link by remember(m.id) { mutableStateOf("") }
-    var busy by remember(m.id) { mutableStateOf(false) }
-    var info by remember(m.id) { mutableStateOf<String?>(null) }
-    val main = remember { Handler(Looper.getMainLooper()) }
-
-    var finding by remember(m.id) { mutableStateOf(false) }
-    var showLink by remember(m.id) { mutableStateOf(false) }
-    var addr by remember(m.id) { mutableStateOf(m.address) }
-    LaunchedEffect(m.id) {
-        if (addr.isBlank()) {
-            addr = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Mosques.lookupAddress(ctx, m) } ?: ""
-            if (addr.isNotBlank()) onUpdated(m.copy(address = addr))
-        }
-        // Mawaqit-Suche liefert oft keine Iqamah – dann die Moschee-Seite selbst lesen
-        if (m.source == "Mawaqit" && m.iqamah.isEmpty() && m.url != null) {
-            val d = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                try { Mosques.fetchDraft(m.url) } catch (e: Exception) { null }
-            }
-            if (d != null && d.iqamah.isNotEmpty()) onUpdated(Mosques.attachLink(ctx, m, d))
-        }
-    }
-    var preview by remember(m.id) { mutableStateOf<Mosques.Draft?>(null) }
-
-    fun findTimes() {
-        if (finding) return
-        finding = true
-        info = null
-        Thread {
-            val d = try {
-                Mosques.findTimes(m)
-            } catch (e: Exception) {
-                null
-            }
-            main.post {
-                finding = false
-                if (d != null && (d.adhan.isNotEmpty() || d.iqamah.isNotEmpty())) {
-                    onUpdated(Mosques.attachLink(ctx, m, d))
-                } else {
-                    info = t("not_found_times")
-                }
-            }
-        }.start()
-    }
-
-    fun loadLink() {
-        if (link.isBlank() || busy) return
-        busy = true
-        info = null
-        Thread {
-            val res = try {
-                Mosques.fetchDraft(link)
-            } catch (e: Exception) {
-                null
-            }
-            main.post {
-                busy = false
-                when {
-                    res == null -> info = t("page_failed") + Mosques.friendlyInfo()
-                    res.adhan.isEmpty() && res.iqamah.isEmpty() ->
-                        info = t("no_times_found") + Mosques.friendlyInfo()
-                    else -> preview = res
-                }
-            }
-        }.start()
-    }
-
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        if (NameFmt.changed(m.name)) Txt(m.name, 12, color = p.sub)
-        // Teilen · Adresse kopieren · Suchen · Route
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val addrText = listOf(m.name, addr).filter { it.isNotBlank() }.joinToString(", ")
-            ActionTile(Glyph.SHARE, t("share")) {
-                val text = addrText + "\nhttps://www.openstreetmap.org/?mlat=%.5f&mlon=%.5f#map=18/%.5f/%.5f".format(
-                    java.util.Locale.US, m.lat, m.lng, m.lat, m.lng
-                ) + (m.url?.let { "\n$it" } ?: "")
-                try {
-                    ctx.startActivity(
-                        Intent.createChooser(
-                            Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), m.name
-                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                } catch (e: Exception) {
-                }
-            }
-            ActionTile(Glyph.COPY, t("copy_address")) {
-                val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
-                cm?.setPrimaryClip(android.content.ClipData.newPlainText(m.name, addrText))
-                info = null
-                android.widget.Toast.makeText(ctx, t("copied"), android.widget.Toast.LENGTH_SHORT).show()
-            }
-            ActionTile(Glyph.SEARCH, t("search_web")) {
-                try {
-                    ctx.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(addrText)))
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                } catch (e: Exception) {
-                }
-            }
-            ActionTile(Glyph.ROUTE, t("route")) {
-                try {
-                    ctx.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("geo:${m.lat},${m.lng}?q=${m.lat},${m.lng}(${Uri.encode(m.name)})"))
-                    )
-                } catch (e: Exception) {
-                    info = t("no_nav")
-                }
-            }
-        }
-        // Gebets-/Wudu-Platz: Fotos, Uhrzeiten, Angaben statt Gebetszeiten
-        val place = Places.get(ctx, m.id)
-        if (place != null) {
-            PlaceDetailContent(ctx, place) {
-                Places.delete(ctx, m.id)
-                onHide(m)
-            }
-        } else {
-        EntrancePhoto(m.id)
-        val isFav = Prefs.favId == m.id
-        Row(
-            Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp))
-                .background(if (isFav) p.accent.copy(alpha = 0.14f) else p.fill)
-                .tap { Prefs.favId = if (isFav) "" else m.id },
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Txt(if (isFav) t("is_my_mosque") else t("set_my_mosque"), 15, FontWeight.SemiBold, if (isFav) p.accentText else Color(0xFF007AFF), maxLines = 1)
-        }
-        if (hasTimes(m)) {
-            // dieselbe (aktuelle) Position wie in der Liste – sonst passen Entfernung und Zeit nicht zusammen
-            val dist = Mosques.distance(myLat, myLng, m.lat, m.lng)
-            var sec by remember(m.id, Prefs.travelMode) { mutableStateOf(listSec) }
-            LaunchedEffect(m.id, Prefs.travelMode) {
-                if (sec == null) {
-                    sec = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        Routing.durations(myLat, myLng, listOf(m), Prefs.travelMode)[m.id]
-                    }
-                }
-            }
-            val tr = Routing.minutes(sec, dist, Prefs.travelMode)
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(p.bg).padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TravelIcon(Prefs.travelMode, p.text, p.bg, 18.dp)
-                Txt(Fmt.duration(tr * 60_000L) + " · " + Mosques.fmtDist(dist), 14, FontWeight.SemiBold)
-            }
-            ArrivalBar(now + tr * 60_000L, nextIqamah(m, evs, now, now + tr * 60_000L)?.third)
-            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
-                Txt(t("prayer"), 12, FontWeight.SemiBold, p.sub, Modifier.weight(1f))
-                Txt(t("adhan"), 12, FontWeight.SemiBold, p.sub, Modifier.width(70.dp), align = TextAlign.End)
-                Txt(t("iqamah"), 12, FontWeight.SemiBold, p.sub, Modifier.width(70.dp), align = TextAlign.End)
-            }
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.bg)) {
-                val prayers = listOf(Kind.FAJR, Kind.DHUHR, Kind.ASR, Kind.MAGHRIB, Kind.ISHA)
-                val isFriday = today.dayOfWeek == java.time.DayOfWeek.FRIDAY
-                val hasJum = m.adhan.containsKey("JUMUAH") || m.iqamah.containsKey("JUMUAH")
-                val rows: List<Triple<String, Ev?, String>> =
-                    prayers.map { k ->
-                        val e = evs.firstOrNull { it.kind == k && it.day == today }
-                        // Freitags: Dhuhr wird zu Jumuah (mit den Jumuah-Zeiten der Moschee, falls vorhanden)
-                        if (isFriday && k == Kind.DHUHR) Triple(t("k_JUMUAH"), e, if (hasJum) "JUMUAH" else k.name)
-                        else Triple(k.label, e, k.name)
-                    } + (if (!isFriday && hasJum) listOf(Triple(t("k_JUMUAH"), null, "JUMUAH")) else emptyList())
-                rows.forEach { (label, e, key) ->
-                    val isNext = e != null && next != null && e.kind == next.kind && e.day == next.day
-                    val c = if (isNext) Color.White else p.text
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isNext) p.accent else Color.Transparent)
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Txt(label, 15, if (isNext) FontWeight.Bold else FontWeight.Medium, c, Modifier.weight(1f))
-                        Txt(m.adhan[key] ?: e?.let { Fmt.time(it.at) } ?: "–", 15, color = c, modifier = Modifier.width(70.dp), align = TextAlign.End)
-                        Txt(m.iqamah[key] ?: "–", 15, FontWeight.Bold, c, Modifier.width(70.dp), align = TextAlign.End)
-                    }
-                }
-            }
-            Txt(
-                if (m.url != null && m.fetchedAt > 0 && m.iqamah.isEmpty()) t("no_iq_hint", m.source)
-                else if (m.url != null && m.fetchedAt > 0) t("times_from", m.source, Fmt.time(m.fetchedAt))
-                else t("iq_manual"),
-                12, color = p.sub
-            )
-        } else {
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(p.bg).padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                ClockIcon(p.sub)
-                Txt(t("no_times"), 16, FontWeight.SemiBold)
-                Txt(
-                    t("no_times_sub"),
-                    13, color = p.sub, align = TextAlign.Center
-                )
-            }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(p.accent)
-                    .tap { findTimes() },
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (!finding) {
-                    androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
-                        val w = size.width
-                        drawCircle(
-                            Color.White, w * 0.32f, androidx.compose.ui.geometry.Offset(w * 0.44f, w * 0.44f),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = w * 0.12f)
-                        )
-                        drawLine(
-                            Color.White, androidx.compose.ui.geometry.Offset(w * 0.68f, w * 0.68f),
-                            androidx.compose.ui.geometry.Offset(w * 0.9f, w * 0.9f),
-                            strokeWidth = w * 0.13f, cap = androidx.compose.ui.graphics.StrokeCap.Round
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                }
-                Txt(if (finding) t("finding") else t("find_times"), 15, FontWeight.SemiBold, Color.White, maxLines = 1)
-            }
-            Txt(t("find_times_sub"), 12, color = p.sub, align = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-        }
-        // Link-Feld: bei Moscheen ohne Zeiten immer, sonst über den Knopf „Link hinzufügen oder ändern“
-        if (hasTimes(m) && !showLink) {
-            Row(
-                Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp)).background(p.fill)
-                    .tap { showLink = true },
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                LinkIcon(Color(0xFF007AFF))
-                Spacer(Modifier.width(8.dp))
-                Txt(t("change_link"), 15, FontWeight.SemiBold, Color(0xFF007AFF), maxLines = 1)
-            }
-        }
-        if (!hasTimes(m) || showLink) {
-            Txt((if (hasTimes(m)) "" else t("or") + " · ") + t("link_label"), 12, color = p.sub, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.bg)
-                    .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(Modifier.weight(1f)) {
-                    if (link.isEmpty()) Txt(t("link_hint"), 14, color = p.sub, maxLines = 1)
-                    BasicTextField(
-                        value = link,
-                        onValueChange = { link = it },
-                        singleLine = true,
-                        textStyle = TextStyle(color = p.text, fontSize = 14.sp),
-                        cursorBrush = SolidColor(Color(0xFF007AFF)),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                Box(
-                    Modifier.clip(RoundedCornerShape(9.dp)).background(Color(0xFF007AFF)).tap { loadLink() }
-                        .padding(horizontal = 12.dp, vertical = 9.dp)
-                ) { Txt(if (busy) t("loading") else t("add_link"), 14, FontWeight.SemiBold, Color.White) }
-            }
-        }
-        if (!hasTimes(m) || showLink) {
-            // Kopierten Link mit einem Tipp übernehmen
-            Row(
-                Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(10.dp)).background(p.fill)
-                    .tap {
-                        val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
-                        val txt = cm?.primaryClip?.getItemAt(0)?.coerceToText(ctx)?.toString()?.trim().orEmpty()
-                        if (txt.isNotBlank() && txt.length < 600) {
-                            link = txt
-                            loadLink()
-                        }
-                    },
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) { Txt(t("paste") + " & " + t("load"), 14, FontWeight.SemiBold, Color(0xFF007AFF)) }
-        }
-        // Vorschau vor dem Speichern
-        preview?.let { d ->
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.bg).padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GreenCheck()
-                    Txt(t("preview_found", d.name, d.adhan.size, d.iqamah.size), 14, FontWeight.SemiBold)
-                }
-                if (d.iqamah.isNotEmpty() || d.adhan.isNotEmpty()) {
-                    Txt(
-                        listOf("FAJR", "DHUHR", "ASR", "MAGHRIB", "ISHA", "JUMUAH").mapNotNull { k ->
-                            val a = d.adhan[k]
-                            val i = d.iqamah[k]
-                            if (a == null && i == null) null else t("k_$k") + " " + (a ?: "–") + (if (i != null) " / $i" else "")
-                        }.joinToString(" · "),
-                        12, color = p.sub
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(
-                        Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp)).background(p.accent)
-                            .tap {
-                                onUpdated(Mosques.attachLink(ctx, m, d))
-                                preview = null
-                                showLink = false
-                            },
-                        contentAlignment = Alignment.Center
-                    ) { Txt(t("apply"), 15, FontWeight.SemiBold, Color.White) }
-                    Box(
-                        Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp)).background(p.fill)
-                            .tap { preview = null },
-                        contentAlignment = Alignment.Center
-                    ) { Txt(t("discard"), 15, FontWeight.SemiBold, p.text) }
-                }
-            }
-        }
-        info?.let { Txt(it, 13, FontWeight.SemiBold, Color(0xFFFF3B30)) }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
-            Box(
-                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF007AFF))
-                    .tap {
-                        try {
-                            ctx.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("geo:${m.lat},${m.lng}?q=${m.lat},${m.lng}(${Uri.encode(m.name)})"))
-                            )
-                        } catch (e: Exception) {
-                            info = t("no_nav")
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) { Txt(t("route"), 15, FontWeight.SemiBold, Color.White) }
-            Box(
-                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(p.fill)
-                    .tap { onEdit(m) },
-                contentAlignment = Alignment.Center
-            ) { Txt(if (hasTimes(m)) t("edit_iq") else t("enter_manual"), 15, FontWeight.SemiBold, Color(0xFF007AFF)) }
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(
-                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(p.fill).tap { onHide(m) },
-                contentAlignment = Alignment.Center
-            ) { Txt(t("hide"), 15, FontWeight.SemiBold, p.text) }
-            Box(
-                Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x1AFF3B30)).tap { onReport(m) },
-                contentAlignment = Alignment.Center
-            ) { Txt(t("report"), 15, FontWeight.SemiBold, Color(0xFFFF3B30)) }
-        }
+private fun StarIcon(on: Boolean, c: Color) {
+    val path = remember { androidx.compose.ui.graphics.vector.PathParser().parsePathString("M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3 6.1 20.6l1.3-6.6L2.5 9.4l6.6-.8z").toPath() }
+    androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
+        val f = size.width / 24f
+        scale(f, f, pivot = androidx.compose.ui.geometry.Offset.Zero) {
+            if (on) drawPath(path, c)
+            else drawPath(path, c, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f, join = androidx.compose.ui.graphics.StrokeJoin.Round))
         }
     }
 }

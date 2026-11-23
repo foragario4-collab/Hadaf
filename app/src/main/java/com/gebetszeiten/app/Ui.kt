@@ -108,6 +108,8 @@ fun Txt(
         fontWeight = weight,
         textAlign = align,
         maxLines = maxLines,
+        // abgeschnittener Text endet mit „…“ statt mitten im Buchstaben
+        overflow = if (maxLines == Int.MAX_VALUE) androidx.compose.ui.text.style.TextOverflow.Clip else androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         lineHeight = (size * 1.25).sp
     )
 }
