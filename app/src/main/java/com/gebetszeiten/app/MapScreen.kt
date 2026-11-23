@@ -269,12 +269,13 @@ fun MapScreen(v: Int) {
         if (force || Mosques.needsRefresh(ctx, myLat, myLng)) {
             status = t("loading_mosques")
             Mosques.refresh(ctx, myLat, myLng) { ok ->
+                mosques = allPlaces(ctx)
+                // Fehler nur zeigen, wenn wirklich nichts da ist – sonst still mit der gespeicherten Liste weiter
                 status = when {
-                    ok -> null
+                    ok || mosques.isNotEmpty() -> null
                     Mosques.lastError == "offline" -> t("err_offline")
                     else -> t("err_busy")
                 }
-                mosques = allPlaces(ctx)
             }
         }
         // Islam-Landkarte (ganz Österreich), einmal im Monat

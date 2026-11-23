@@ -12,8 +12,8 @@ android {
         applicationId = "com.gebetszeiten.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 54
-        versionName = "6.1.4"
+        versionCode = 55
+        versionName = "6.1.5"
         // Nummer des GitHub-Builds (für das In-App-Update)
         buildConfigField("int", "BUILD_RUN", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }

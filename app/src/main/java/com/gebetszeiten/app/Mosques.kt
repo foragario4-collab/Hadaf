@@ -722,8 +722,12 @@ object Mosques {
 
     // ---------------- OpenStreetMap ----------------
 
+    /** Letzter fehlgeschlagener Versuch – danach 15 Minuten Pause, statt bei jedem Öffnen die Server zu fragen. */
+    @Volatile private var lastFailAt = 0L
+
     fun needsRefresh(ctx: Context, lat: Double, lng: Double): Boolean {
         list(ctx)
+        if (System.currentTimeMillis() - lastFailAt < 15 * 60_000L) return false
         if (osm.isNullOrEmpty()) return true
         if (System.currentTimeMillis() - fetchedAt > 7L * 24 * 3600_000L) return true
         return distance(lat, lng, centerLat, centerLng) > 15_000f
@@ -761,6 +765,7 @@ object Mosques {
             } catch (e: Exception) {
                 false
             }
+            if (!ok) lastFailAt = System.currentTimeMillis() else lastFailAt = 0L
             val cbs = synchronized(waiting) {
                 loading = false
                 val l = ArrayList(waiting)
@@ -786,7 +791,7 @@ object Mosques {
         val q = "[out:json][timeout:30];(" +
             "nwr[\"religion\"=\"muslim\"]$a;" +
             "nwr[\"building\"=\"mosque\"]$a;" +
-            "nwr[\"name\"~\"Moschee|Mosque|Masjid|Mesjid|Mescid|Camii|Cami|Džamija|Dzamija|Musalla|Mussala|Gebetsraum|Islamisch|Islamic|Islamski\",i]$n;" +
+            "nwr[\"amenity\"][\"name\"~\"Moschee|Mosque|Masjid|Mesjid|Mescid|Camii|Cami|Džamija|Dzamija|Musalla|Mussala|Gebetsraum|Islamisch|Islamic|Islamski\",i]$n;" +
             ");out center tags;"
         val body = overpass(q)
         val els = JSONObject(body).getJSONArray("elements")

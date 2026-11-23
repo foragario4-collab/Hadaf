@@ -45,6 +45,33 @@ object Places {
         return out
     }
 
+    // ---- Bezeichnungen der Fotos (Eingang, Wudu Frauen …), neben den Fotos gespeichert ----
+    private fun labelFile(ctx: Context, mosqueId: String) =
+        File(File(File(ctx.filesDir, "eingang"), safe(mosqueId)).also { it.mkdirs() }, "labels.json")
+
+    private fun labels(ctx: Context, mosqueId: String): JSONObject = try {
+        val f = labelFile(ctx, mosqueId)
+        if (f.exists()) JSONObject(f.readText()) else JSONObject()
+    } catch (e: Exception) {
+        JSONObject()
+    }
+
+    /** Bezeichnung eines Fotos (Schlüssel wie „ph_wudu_w“) oder null. Das alte einzelne Eingangsfoto heißt „Eingang“. */
+    fun photoLabel(ctx: Context, mosqueId: String, f: File): String? =
+        labels(ctx, mosqueId).optString(f.name).ifBlank { null }
+            ?: if (f == entranceFile(ctx, mosqueId)) "ph_entrance" else null
+
+    fun setPhotoLabel(ctx: Context, mosqueId: String, f: File, key: String?) {
+        val o = labels(ctx, mosqueId)
+        if (key.isNullOrBlank()) o.remove(f.name) else o.put(f.name, key)
+        try { labelFile(ctx, mosqueId).writeText(o.toString()) } catch (e: Exception) { }
+    }
+
+    fun deleteMosquePhoto(ctx: Context, mosqueId: String, f: File) {
+        try { f.delete() } catch (e: Exception) { }
+        setPhotoLabel(ctx, mosqueId, f, null)
+    }
+
     fun newMosquePhoto(ctx: Context, mosqueId: String): File {
         val dir = File(File(ctx.filesDir, "eingang"), safe(mosqueId)).also { it.mkdirs() }
         return File(dir, "foto_${System.currentTimeMillis()}.jpg")

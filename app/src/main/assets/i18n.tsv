@@ -500,3 +500,16 @@ ps_note	Aus, Ton oder Adhan und die Zeitkorrektur gelten nur für {0}. Die Erinn
 ps_note_other	Gilt nur für {0}.	Applies only to {0}.	Yalnızca {0} için geçerlidir.	Važi samo za {0}.	Važi samo za {0}.	Vlen vetëm për {0}.	Ne vaut que pour {0}.	Только для {0}.	{0} бен ца хьоьгу.	仅适用于{0}。	يخص {0} فقط.
 hero_tomorrow	morgen um {0}	tomorrow at {0}	yarın {0}	sutra u {0}	sutra u {0}	nesër në {0}	demain à {0}	завтра в {0}	кхана {0}	明天 {0}	غدًا في {0}
 next_prayer_up	Nächstes Gebet	Next prayer	Sıradaki namaz	Sljedeći namaz	Sledeći namaz	Namazi i radhës	Prochaine prière	Следующая молитва	ТӀаккха ламаз	下一次礼拜	الصلاة القادمة
+ph_title	Was zeigt das Foto?	What does the photo show?	Fotoğrafta ne var?	Šta pokazuje slika?	Šta pokazuje slika?	Çfarë tregon fotoja?	Que montre la photo ?	Что на фото?	Суьрта тӀехь хӀун ду?	照片显示什么？	ماذا تُظهر الصورة؟
+ph_choose	Bezeichnung wählen	Choose label	Etiket seç	Odaberi oznaku	Izaberi oznaku	Zgjidh emërtimin	Choisir un libellé	Выбрать подпись	ЦӀе харжа	选择标签	اختر التسمية
+ph_entrance	Eingang	Entrance	Giriş	Ulaz	Ulaz	Hyrja	Entrée	Вход	ЧуволийларгӀа	入口	المدخل
+ph_entrance_w	Eingang Frauen	Women’s entrance	Kadın girişi	Ulaz za žene	Ulaz za žene	Hyrja e grave	Entrée femmes	Вход для женщин	Зударийн чуволийларгӀа	女性入口	مدخل النساء
+ph_prayer_m	Gebetsraum Männer	Men’s prayer hall	Erkek namazgâhı	Muški mesdžid	Muški mesdžid	Salla e burrave	Salle des hommes	Мужской зал	Боьршачийн ламазан чоь	男性礼拜厅	مصلى الرجال
+ph_prayer_w	Gebetsraum Frauen	Women’s prayer hall	Kadın namazgâhı	Ženski mesdžid	Ženski mesdžid	Salla e grave	Salle des femmes	Женский зал	Зударийн ламазан чоь	女性礼拜厅	مصلى النساء
+ph_wudu_m	Wudu Männer	Men’s wudu	Erkek abdesthane	Abdesthana muški	Abdesthana muški	Abdesi i burrave	Ablutions hommes	Омовение (муж.)	Боьршачийн ламаз эцар	男性小净处	وضوء الرجال
+ph_wudu_w	Wudu Frauen	Women’s wudu	Kadın abdesthane	Abdesthana ženski	Abdesthana ženski	Abdesi i grave	Ablutions femmes	Омовение (жен.)	Зударийн ламаз эцар	女性小净处	وضوء النساء
+ph_parking	Parkplatz	Parking	Otopark	Parking	Parking	Parkimi	Parking	Парковка	Машен дӀахӀоттор	停车场	موقف السيارات
+ph_hours	Öffnungszeiten	Opening hours	Açılış saatleri	Radno vrijeme	Radno vreme	Orari	Horaires d’ouverture	Часы работы	Схьайоьллу хенаш	开放时间	أوقات الفتح
+ph_board	Gebetszeiten-Aushang	Prayer times board	Namaz vakitleri panosu	Tabla s vaktijom	Tabla s vaktijom	Tabela e kohëve	Affiche des horaires	Расписание молитв	Ламазан хенийн у	礼拜时间表	لوحة أوقات الصلاة
+ph_other	Sonstiges	Other	Diğer	Ostalo	Ostalo	Tjetër	Autre	Другое	Кхин	其他	أخرى
+ph_delete	Foto löschen	Delete photo	Fotoğrafı sil	Obriši sliku	Obriši sliku	Fshi foton	Supprimer la photo	Удалить фото	Сурт дӀадаккха	删除照片	حذف الصورة

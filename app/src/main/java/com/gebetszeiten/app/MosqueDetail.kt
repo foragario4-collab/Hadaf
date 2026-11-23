@@ -397,12 +397,25 @@ internal fun MosqueDetailNew(
         if (busy) return
         busy = true
         info = null
+        // Mawaqit-Moscheen: über die Mawaqit-Schnittstelle neu holen (zuverlässiger als die Webseite)
+        if (m.source == "Mawaqit") {
+            Mosques.refreshMawaqit(ctx, m.lat, m.lng) { ok ->
+                busy = false
+                if (ok) onUpdated(m) else info = t("page_failed") + Mosques.friendlyInfo()
+            }
+            return
+        }
         Thread {
             val d = try { Mosques.fetchDraft(u) } catch (e: Exception) { null }
+            val loaded = Mosques.lastFetchInfo.startsWith("OK")
             main.post {
                 busy = false
-                if (d != null && (d.adhan.isNotEmpty() || d.iqamah.isNotEmpty())) onUpdated(Mosques.attachLink(ctx, m, d))
-                else info = t("page_failed") + Mosques.friendlyInfo()
+                when {
+                    d != null && (d.adhan.isNotEmpty() || d.iqamah.isNotEmpty()) -> onUpdated(Mosques.attachLink(ctx, m, d))
+                    // Seite ging auf, enthält aber keine lesbaren Zeiten (z. B. normale Webseite der Moschee)
+                    loaded -> info = t("no_times_found")
+                    else -> info = t("page_failed") + Mosques.friendlyInfo()
+                }
             }
         }.start()
     }
@@ -432,15 +445,11 @@ internal fun MosqueDetailNew(
         verticalArrangement = Arrangement.spacedBy(if (full) 9.dp else 10.dp)
     ) {
         BigRoute(m, tr, full) { info = t("no_nav") }
-        if (full) {
-            ThreeActions(m, addr)
-        } else if (hasTimesM(m)) {
-            ArrivalBar(now + tr * 60_000L, focus?.takeIf { it.phase <= 1 }?.iqMs)
-        }
+        if (hasTimesM(m)) ArrivalBar(now + tr * 60_000L, focus?.takeIf { it.phase <= 1 }?.iqMs)
 
         if (hasTimesM(m)) {
-            // eingeklappt: nur das aktuelle Gebet; hochgezogen: die ganze Tabelle
-            TimesCard(m, evs, now, focus, showFocus = !full, showTable = full)
+            // eingeklappt wie hochgezogen: Route und die ganze Tabelle, das aktuelle Gebet darin markiert
+            TimesCard(m, evs, now, focus, showFocus = false, showTable = true)
         } else if (!full) {
             Txt(t("mq_times_hint"), 13, color = p.sub, maxLines = 2)
         } else {
@@ -468,6 +477,9 @@ internal fun MosqueDetailNew(
                 }
             }
         }
+
+        // hochgezogen: Suchen · Kopieren · Teilen direkt unter den Zeiten
+        if (full) ThreeActions(m, addr)
 
         // Link eingeben (nach „Link hinzufügen/ändern“ oder „Link führt zur falschen Moschee“)
         if (showLink) LinkEditor(m, link, busy, onChange = { link = it }, onLoad = { loadLink() }, onRemove = {
@@ -617,20 +629,41 @@ private fun DraftPreview(d: Mosques.Draft, onApply: () -> Unit, onDiscard: () ->
     }
 }
 
-/** Fotos vom Weg: niedrige Leiste, erstes Bild „Eingang“, am Ende „+ Foto“. */
+/** Feste Bezeichnungen für Fotos – auswählen statt frei schreiben, damit jeder versteht, was das Bild zeigt. */
+private val PHOTO_LABELS = listOf(
+    "ph_entrance", "ph_entrance_w", "ph_prayer_m", "ph_prayer_w", "ph_wudu_m",
+    "ph_wudu_w", "ph_parking", "ph_hours", "ph_board", "ph_other"
+)
+
+/** Fotos vom Weg: niedrige Leiste, jedes Bild mit seiner Bezeichnung, am Ende „+ Foto“. */
 @Composable
 private fun PhotoStrip(mosqueId: String) {
     val ctx = LocalContext.current
     val p = LocalPal.current
     var version by remember(mosqueId) { mutableStateOf(0) }
     var viewer by remember { mutableStateOf<String?>(null) }
+    var labelFor by remember { mutableStateOf<java.io.File?>(null) }
     val photos = remember(mosqueId, version) { Places.mosquePhotos(ctx, mosqueId) }
-    val camera = rememberCamera(dest = { Places.newMosquePhoto(ctx, mosqueId) }, onSaved = { version++ })
+    val camera = rememberCamera(dest = { Places.newMosquePhoto(ctx, mosqueId) }, onSaved = { f ->
+        version++
+        labelFor = f   // gleich fragen, was das Foto zeigt
+    })
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         photos.forEachIndexed { i, f ->
-            Box(Modifier.clip(RoundedCornerShape(12.dp))) {
-                androidx.compose.runtime.key(f.path, version) { PhotoThumb(f.path, if (i == 0) 128.dp else 92.dp, 64.dp) { viewer = f.path } }
-                if (i == 0) Txt(t("entrance"), 11, FontWeight.SemiBold, Color.White, Modifier.align(Alignment.BottomStart).padding(6.dp))
+            val label = remember(f.path, version) { Places.photoLabel(ctx, mosqueId, f) }
+            val w = if (i == 0) 128.dp else 104.dp
+            Box(Modifier.size(w, 64.dp).clip(RoundedCornerShape(12.dp))) {
+                androidx.compose.runtime.key(f.path, version) { PhotoThumb(f.path, w, 64.dp) { viewer = f.path } }
+                // Bezeichnung unten links, gut lesbar auf jedem Bild; antippen = ändern
+                Box(
+                    Modifier.align(Alignment.BottomStart).padding(5.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(if (label != null) Color.Black.copy(alpha = 0.55f) else BLUE.copy(alpha = 0.85f))
+                        .tap(scale = 0.94f) { labelFor = f }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Txt(label?.let { t(it) } ?: t("ph_choose"), 10, FontWeight.SemiBold, Color.White, maxLines = 1)
+                }
             }
         }
         if (photos.size < 10) {
@@ -642,6 +675,55 @@ private fun PhotoStrip(mosqueId: String) {
         }
     }
     viewer?.let { PhotoViewer(it) { viewer = null } }
+    labelFor?.let { f ->
+        PhotoLabelPicker(
+            current = Places.photoLabel(ctx, mosqueId, f),
+            onPick = { k ->
+                Places.setPhotoLabel(ctx, mosqueId, f, k)
+                labelFor = null
+                version++
+            },
+            onDelete = {
+                Places.deleteMosquePhoto(ctx, mosqueId, f)
+                labelFor = null
+                version++
+            },
+            onClose = { labelFor = null }
+        )
+    }
+}
+
+/** „Was zeigt das Foto?“ – feste Auswahl in zwei Spalten, dazu Foto löschen. */
+@Composable
+private fun PhotoLabelPicker(current: String?, onPick: (String) -> Unit, onDelete: () -> Unit, onClose: () -> Unit) {
+    val p = LocalPal.current
+    Dialog(onDismissRequest = onClose) {
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(p.card).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Txt(t("ph_title"), 17, FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), align = TextAlign.Center)
+            PHOTO_LABELS.chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { k ->
+                        val on = k == current
+                        Box(
+                            Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp))
+                                .background(if (on) p.accent else p.bg)
+                                .tap(scale = 0.95f) { onPick(k) }
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) { Txt(t(k), 14, FontWeight.SemiBold, if (on) Color.White else p.text, maxLines = 1, align = TextAlign.Center) }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Txt(t("ph_delete"), 15, FontWeight.SemiBold, RED, Modifier.tap(onClick = onDelete).padding(8.dp))
+                Txt(t("ok"), 15, FontWeight.Bold, BLUE, Modifier.tap(onClick = onClose).padding(8.dp))
+            }
+        }
+    }
 }
 
 private fun factValue(key: String, v: String?): String = when (v) {
