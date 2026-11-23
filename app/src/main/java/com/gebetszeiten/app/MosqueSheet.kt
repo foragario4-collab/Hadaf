@@ -444,8 +444,8 @@ private fun ModeSegmented(selected: Int, onSelect: (Int) -> Unit) {
 internal fun ArrivalBar(arrMs: Long, iqMs: Long?) {
     val p = LocalPal.current
     val arrMin = Math.ceil(arrMs / 60_000.0).toLong()
-    val green = Color(0xFF248A3D)
-    val red = Color(0xFFD70015)
+    val green = okColor(p)
+    val red = badColor(p)
     val (c, diffText) = if (iqMs == null) {
         p.sub to ""
     } else {

@@ -174,7 +174,7 @@ fun AddPlaceDialog(kind0: String, lat: Double, lng: Double, onClose: () -> Unit,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Txt(t("sec_location"), 16, modifier = Modifier.weight(1f))
-            Txt(t("position_gps"), 14, FontWeight.SemiBold, Color(0xFF248A3D))
+            Txt(t("position_gps"), 14, FontWeight.SemiBold, okColor(LocalPal.current))
         }
         Txt(t("details"), 12, color = p.sub, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
         TagChips(tagKeys(kind), tags) { k -> if (k in tags) tags.remove(k) else tags.add(k) }

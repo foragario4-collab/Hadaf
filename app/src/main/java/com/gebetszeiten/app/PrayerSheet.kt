@@ -33,7 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -49,13 +48,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 import kotlinx.coroutines.launch
 
 /** Symbole für das Gebets-Blatt. */
@@ -165,15 +160,9 @@ internal fun PrayerSheet(e: Ev, now: Long, nextAt: Long?, onClose: () -> Unit, o
         else -> 1
     }
 
-    Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        // eigenes Abdunkeln und Hochgleiten statt der Android-Standardanimation
-        val view = LocalView.current
-        SideEffect {
-            (view.parent as? DialogWindowProvider)?.window?.let { w ->
-                w.setDimAmount(0f)
-                w.setWindowAnimations(0)
-            }
-        }
+    // liegt über der ganzen App (SheetHost) – deckt Statusleiste und Tab-Leiste mit ab
+    androidx.activity.compose.BackHandler { close() }
+    run {
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier.fillMaxSize()

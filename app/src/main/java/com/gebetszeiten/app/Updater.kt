@@ -21,7 +21,7 @@ import java.net.URL
  * lädt die APK und übergibt sie dem Android-Installer. Android fragt vor dem Installieren immer nach.
  */
 object Updater {
-    private const val REPO = "foragario4-collab/Gebetszeiten"
+    private const val REPO = "foragario4-collab/Hadaf"
     private const val CH_UPDATE = "app_update"
     private const val NOTIF_ID = 4711
     const val ACTION_INSTALLED = "com.gebetszeiten.app.UPDATE_STATUS"

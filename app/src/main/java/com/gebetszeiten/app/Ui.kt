@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,6 +90,18 @@ val DarkPal = Pal(
     hl = Color(0x244FD6BC), fill = Color(0xFF39393D), seg = Color(0xFF636366), dark = true
 )
 val LocalPal = staticCompositionLocalOf { LightPal }
+
+/**
+ * Platz für Blätter über der ganzen App (über Tab-Leiste und Statusleiste), ohne eigenes Fenster –
+ * so stimmen Ränder, Abdunkeln und Abstände zur Navigationsleiste immer.
+ */
+object SheetHost {
+    var content: (@androidx.compose.runtime.Composable () -> Unit)? by androidx.compose.runtime.mutableStateOf(null)
+}
+
+/** Statusfarben wie bei Apple: auf hellem Grund dunkler, auf dunklem Grund heller – immer gut lesbar. */
+fun okColor(p: Pal) = if (p.dark) Color(0xFF30D158) else Color(0xFF248A3D)
+fun badColor(p: Pal) = if (p.dark) Color(0xFFFF6961) else Color(0xFFD70015)
 
 @Composable
 fun Txt(

@@ -596,8 +596,13 @@ fun MapScreen(v: Int) {
     if (showRadarInfo) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showRadarInfo = false },
+            // Farben aus der App-Palette: hell und dunkel lesbar
+            containerColor = LocalPal.current.card,
+            titleContentColor = LocalPal.current.text,
+            textContentColor = LocalPal.current.text,
+            shape = RoundedCornerShape(22.dp),
             title = { Txt(t("sec_radar"), 18, FontWeight.Bold) },
-            text = { Txt(t("radar_explain"), 15) },
+            text = { Txt(t("radar_explain"), 15, color = LocalPal.current.sub) },
             confirmButton = {
                 Txt(t("radar_start"), 16, FontWeight.SemiBold, Color(0xFF007AFF), Modifier.tap {
                     showRadarInfo = false

@@ -203,9 +203,9 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                     // Mitte: nächstes Gebet groß (heute) bzw. Titel des gewählten Tages
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         if (isToday) {
-                            androidx.compose.material3.Text(t("next_up").uppercase(), color = fg.copy(alpha = 0.9f), style = ts(13, FontWeight.SemiBold).copy(letterSpacing = 1.5.sp))
+                            androidx.compose.material3.Text((if (next.kind.prayer) t("next_prayer_up") else t("next_up")).uppercase(), color = fg.copy(alpha = 0.9f), style = ts(13, FontWeight.SemiBold).copy(letterSpacing = 1.5.sp))
                             androidx.compose.material3.Text(next.title, color = fg, style = ts(if (small) 32 else 40, FontWeight.Bold), maxLines = 1)
-                            androidx.compose.material3.Text(Fmt.countdown(next.at - now), color = fg, style = ts(if (small) 48 else 60, FontWeight.ExtraLight).copy(letterSpacing = (-2).sp), maxLines = 1)
+                            androidx.compose.material3.Text(WidgetPainter.cd(next.at - now), color = fg, style = ts(if (small) 48 else 60, FontWeight.ExtraLight).copy(letterSpacing = (-2).sp), maxLines = 1)
                             androidx.compose.material3.Text(if (next.day != today) t("hero_tomorrow", Fmt.time(next.at)) else t("at_time", Fmt.time(next.at)), color = fg.copy(alpha = 0.92f), style = ts(15, FontWeight.Normal))
                             Spacer(Modifier.height(8.dp))
                             Box(Modifier.width(170.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(fg.copy(alpha = 0.25f))) {
@@ -252,11 +252,15 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
         }
     }
 
-    // Gebet angetippt: Blatt mit Ton-Einstellungen gleitet hoch
-    sheetKind?.let { k ->
-        val ev = list.firstOrNull { it.kind == k }
-        if (ev != null) PrayerSheet(ev, now, if (isToday) nextOf(ev) else ev.at.takeIf { it > now }, onClose = { sheetKind = null }) { rev++ }
+    // Gebet angetippt: Blatt mit Ton-Einstellungen gleitet über der ganzen App hoch
+    val sheetEv = sheetKind?.let { k -> list.firstOrNull { it.kind == k } }
+    val sheetNext = sheetEv?.let { if (isToday) nextOf(it) else it.at.takeIf { a -> a > now } }
+    androidx.compose.runtime.SideEffect {
+        SheetHost.content = if (sheetEv == null) null else {
+            { PrayerSheet(sheetEv, now, sheetNext, onClose = { sheetKind = null }) { rev++ } }
+        }
     }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { SheetHost.content = null } }
 }
 
 /** Pfeil in der Datums-Kapsel. */
@@ -508,7 +512,7 @@ private fun MyMosqueCard(now: Long, v: Int, onOpenMap: () -> Unit) {
             val leave = target - i.travel * 60_000L
             val missed = f.phase == 2
             val late = leave < now
-            val c = if (missed) p.sub else if (late) Color(0xFFD70015) else Color(0xFF248A3D)
+            val c = if (missed) p.sub else if (late) badColor(p) else okColor(p)
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.copy(alpha = 0.13f)).padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically

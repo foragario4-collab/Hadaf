@@ -113,6 +113,8 @@ fun App() {
             NavRequest.settings = false
         }
     }
+    // Material-Bausteine (Dialoge, Ladekreise, Textauswahl) passen sich hell/dunkel an
+    androidx.compose.material3.MaterialTheme(colorScheme = materialScheme(pal)) {
     CompositionLocalProvider(LocalPal provides pal, LocalLayoutDirection provides dir) {
         if (!Prefs.setupDone) {
             OnboardingScreen(v)
@@ -152,7 +154,10 @@ fun App() {
                     SettingsScreen(v) { showSettings = false }
                 }
         }
+            // Blätter über allem (auch über der Tab-Leiste), z. B. Ton-Einstellungen eines Gebets
+            SheetHost.content?.invoke()
         }
+    }
     }
 }
 
@@ -247,3 +252,16 @@ object NavRequest {
     var tab by androidx.compose.runtime.mutableIntStateOf(-1)
     var settings by androidx.compose.runtime.mutableStateOf(false)
 }
+
+
+/** Farbschema für Material-Bausteine passend zur App-Palette (hell/dunkel). */
+internal fun materialScheme(p: Pal): androidx.compose.material3.ColorScheme =
+    if (p.dark) androidx.compose.material3.darkColorScheme(
+        primary = p.accentText, onPrimary = Color.Black, background = p.bg, onBackground = p.text,
+        surface = p.card, onSurface = p.text, surfaceVariant = p.fill, onSurfaceVariant = p.sub,
+        surfaceContainerHigh = p.card, surfaceContainerHighest = p.card, surfaceContainer = p.card, outline = p.line
+    ) else androidx.compose.material3.lightColorScheme(
+        primary = p.accent, onPrimary = Color.White, background = p.bg, onBackground = p.text,
+        surface = p.card, onSurface = p.text, surfaceVariant = p.fill, onSurfaceVariant = p.sub,
+        surfaceContainerHigh = p.card, surfaceContainerHighest = p.card, surfaceContainer = p.card, outline = p.line
+    )
