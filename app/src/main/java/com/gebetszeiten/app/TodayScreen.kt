@@ -161,38 +161,48 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                         SkyIconButton("M4 7h10M18 7h2M4 17h4M12 17h8M16 5a2 2 0 1 0 0 4a2 2 0 1 0 0-4zM10 15a2 2 0 1 0 0 4a2 2 0 1 0 0-4z", fg, onClick = onSettings)
                     }
                     if (wx != null) {
+                        // Wetter groß und ruhig wie bei Apple Wetter: Symbol · Temperatur · Beschreibung
                         Row(
-                            Modifier.fillMaxWidth().padding(top = 1.dp),
+                            Modifier.fillMaxWidth().padding(top = if (small) 2.dp else 6.dp),
                             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
                         ) {
-                            GlyphIcon(wxGlyph(wx, sky.st.night), fg.copy(alpha = 0.92f), 16.dp)
-                            Spacer(Modifier.width(6.dp))
+                            GlyphIcon(wxGlyph(wx, sky.st.night), fg, if (small) 26.dp else 30.dp)
+                            wx.temp?.let {
+                                Spacer(Modifier.width(10.dp))
+                                androidx.compose.material3.Text(
+                                    "$it°", color = fg, maxLines = 1,
+                                    style = ts(if (small) 30 else 34, FontWeight.Light).copy(letterSpacing = (-1).sp, fontFeatureSettings = "tnum")
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
                             androidx.compose.material3.Text(
-                                listOfNotNull(wx.temp?.let { "$it°" }, wx.label()).joinToString(" · "),
-                                color = fg.copy(alpha = 0.92f), maxLines = 1, style = ts(13, FontWeight.Medium)
+                                wx.label(), color = fg, maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                style = ts(17, FontWeight.SemiBold)
                             )
                         }
                     }
-                    Box(Modifier.fillMaxWidth().padding(top = if (small) 8.dp else 12.dp), contentAlignment = Alignment.Center) {
+                    // Datum in einer breiten Kapsel – große, gut lesbare Schrift
+                    Box(Modifier.fillMaxWidth().padding(top = if (small) 8.dp else 14.dp), contentAlignment = Alignment.Center) {
                         Row(
-                            Modifier.widthIn(max = 360.dp).glass(reg, "datepill", 23.dp, tint).padding(6.dp),
+                            Modifier.fillMaxWidth().widthIn(max = 480.dp).glass(reg, "datepill", 30.dp, tint).padding(7.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             PillChevron(Glyph.CHEV_L) { offset-- }
                             Column(
-                                Modifier.weight(1f, fill = false).padding(horizontal = 10.dp),
+                                Modifier.weight(1f).padding(horizontal = 8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 androidx.compose.material3.Text(
                                     DateText.headerMain(dayMs), color = Color.White, maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    style = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                    style = androidx.compose.ui.text.TextStyle(fontSize = if (small) 16.sp else 18.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.1).sp)
                                 )
                                 DateText.headerLine2(dayMs)?.let {
                                     androidx.compose.material3.Text(
-                                        it, color = Color.White.copy(alpha = 0.8f), maxLines = 1,
+                                        it, color = Color.White.copy(alpha = 0.82f), maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                        style = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                                        style = androidx.compose.ui.text.TextStyle(fontSize = if (small) 12.sp else 13.5.sp)
                                     )
                                 }
                             }
@@ -267,9 +277,9 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
 @Composable
 private fun PillChevron(path: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)).tap(scale = 0.9f, onClick = onClick),
+        Modifier.size(42.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.13f)).tap(scale = 0.9f, onClick = onClick),
         contentAlignment = Alignment.Center
-    ) { GlyphIcon(path, Color.White, 16.dp) }
+    ) { GlyphIcon(path, Color.White, 18.dp) }
 }
 
 /** Wettersymbol passend zum echten Wetter (nachts Mond statt Sonne). */

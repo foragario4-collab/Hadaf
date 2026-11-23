@@ -251,7 +251,7 @@ private fun tableRows(m: Mosque, evs: List<Ev>, now: Long): List<TRow> {
 
 /** Zeiten der Moschee: oben (halb offen) das aktuelle Gebet groß, darunter die Tabelle. */
 @Composable
-internal fun TimesCard(m: Mosque, evs: List<Ev>, now: Long, focus: MosqueFocus?, showFocus: Boolean) {
+internal fun TimesCard(m: Mosque, evs: List<Ev>, now: Long, focus: MosqueFocus?, showFocus: Boolean, showTable: Boolean = true) {
     val p = LocalPal.current
     val red = Color(0xFFFF6B5E)
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.bg)) {
@@ -276,42 +276,44 @@ internal fun TimesCard(m: Mosque, evs: List<Ev>, now: Long, focus: MosqueFocus?,
                     )
                 }
             }
-            Box(Modifier.fillMaxWidth().height(0.5.dp).background(p.line))
+            if (showTable) Box(Modifier.fillMaxWidth().height(0.5.dp).background(p.line))
         }
-        Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 2.dp)) {
-            Txt(t("prayer").uppercase(), 11, FontWeight.SemiBold, p.sub, Modifier.weight(1f), maxLines = 1)
-            Txt(t("adhan").uppercase(), 11, FontWeight.SemiBold, p.sub, Modifier.width(66.dp), align = TextAlign.End, maxLines = 1)
-            Txt(t("iqamah").uppercase(), 11, FontWeight.SemiBold, p.sub, Modifier.width(66.dp), align = TextAlign.End, maxLines = 1)
-        }
-        val today = Times.today(now)
-        tableRows(m, evs, now).forEach { r ->
-            val isFocus = focus != null && r.ev != null && focus.ev.kind == r.ev.kind && focus.ev.day == today
-            val adTxt = m.adhan[r.key] ?: r.ev?.let { Fmt.time(it.at) } ?: "–"
-            val iqTxt = m.iqamah[r.key] ?: "–"
-            val past = !isFocus && r.ev != null && r.ev.at < now - 60_000L
-            val c = when {
-                isFocus -> p.accentText
-                past -> p.sub.copy(alpha = 0.75f)
-                else -> p.text
+        if (showTable) {
+            Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 2.dp)) {
+                Txt(t("prayer").uppercase(), 11, FontWeight.SemiBold, p.sub, Modifier.weight(1f), maxLines = 1)
+                Txt(t("adhan").uppercase(), 11, FontWeight.SemiBold, p.sub, Modifier.width(66.dp), align = TextAlign.End, maxLines = 1)
+                Txt(t("iqamah").uppercase(), 11, FontWeight.SemiBold, p.sub, Modifier.width(66.dp), align = TextAlign.End, maxLines = 1)
             }
-            Row(
-                Modifier.fillMaxWidth().background(if (isFocus) p.accentText.copy(alpha = 0.12f) else Color.Transparent)
-                    .padding(horizontal = 14.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Txt(r.label, 15, if (isFocus) FontWeight.Bold else FontWeight.Medium, c, maxLines = 1)
-                    if (isFocus && !showFocus && focus != null && focus.phase <= 1) {
-                        val ms = if (focus.phase == 0) focus.adhanMs else focus.iqMs ?: focus.adhanMs
-                        Spacer(Modifier.width(6.dp))
-                        Txt(t("in_time", WidgetPainter.cd(ms - now)), 12, FontWeight.SemiBold, p.accentText, maxLines = 1)
-                    }
+            val today = Times.today(now)
+            tableRows(m, evs, now).forEach { r ->
+                val isFocus = focus != null && r.ev != null && focus.ev.kind == r.ev.kind && focus.ev.day == today
+                val adTxt = m.adhan[r.key] ?: r.ev?.let { Fmt.time(it.at) } ?: "–"
+                val iqTxt = m.iqamah[r.key] ?: "–"
+                val past = !isFocus && r.ev != null && r.ev.at < now - 60_000L
+                val c = when {
+                    isFocus -> p.accentText
+                    past -> p.sub.copy(alpha = 0.75f)
+                    else -> p.text
                 }
-                Txt(adTxt, 15, color = c, modifier = Modifier.width(66.dp), align = TextAlign.End, maxLines = 1)
-                Txt(iqTxt, 15, FontWeight.Bold, c, Modifier.width(66.dp), align = TextAlign.End, maxLines = 1)
+                Row(
+                    Modifier.fillMaxWidth().background(if (isFocus) p.accentText.copy(alpha = 0.12f) else Color.Transparent)
+                        .padding(horizontal = 14.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Txt(r.label, 15, if (isFocus) FontWeight.Bold else FontWeight.Medium, c, maxLines = 1)
+                        if (isFocus && !showFocus && focus != null && focus.phase <= 1) {
+                            val ms = if (focus.phase == 0) focus.adhanMs else focus.iqMs ?: focus.adhanMs
+                            Spacer(Modifier.width(6.dp))
+                            Txt(t("in_time", WidgetPainter.cd(ms - now)), 12, FontWeight.SemiBold, p.accentText, maxLines = 1)
+                        }
+                    }
+                    Txt(adTxt, 15, color = c, modifier = Modifier.width(66.dp), align = TextAlign.End, maxLines = 1)
+                    Txt(iqTxt, 15, FontWeight.Bold, c, Modifier.width(66.dp), align = TextAlign.End, maxLines = 1)
+                }
             }
+            Spacer(Modifier.height(6.dp))
         }
-        Spacer(Modifier.height(6.dp))
     }
 }
 
@@ -437,7 +439,10 @@ internal fun MosqueDetailNew(
         }
 
         if (hasTimesM(m)) {
-            TimesCard(m, evs, now, focus, showFocus = !full)
+            // eingeklappt: nur das aktuelle Gebet; hochgezogen: die ganze Tabelle
+            TimesCard(m, evs, now, focus, showFocus = !full, showTable = full)
+        } else if (!full) {
+            Txt(t("mq_times_hint"), 13, color = p.sub, maxLines = 2)
         } else {
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.bg).padding(14.dp),
@@ -1018,7 +1023,7 @@ internal fun PlaceDetailNew(
         }
         // übrige Angaben
         val rest = pl.tags.filter { it != "t_in" && it != "t_out" }
-        if (rest.isNotEmpty()) {
+        if (full && rest.isNotEmpty()) {
             SecLabel(t("sh_facts"))
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 rest.chunked(2).forEach { row ->
@@ -1037,7 +1042,7 @@ internal fun PlaceDetailNew(
                 }
             }
         }
-        if (pl.photos.isNotEmpty()) {
+        if (full && pl.photos.isNotEmpty()) {
             SecLabel(t("sh_photos"))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 pl.photos.forEachIndexed { i, ph ->

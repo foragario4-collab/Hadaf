@@ -337,7 +337,7 @@ fun BoxScope.MosqueBottomSheet(
                 )
                 .tap { if (selected == null) toggle() else scope.launch { h.animateTo(if (full) midPx else fullPx, spring(dampingRatio = 0.85f)) } }
                 .then(if (selected == null) Modifier.height(peekDp) else Modifier)
-                .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)
+                .padding(start = 16.dp, end = if (selected == null) 16.dp else 12.dp, top = 8.dp, bottom = 10.dp)
         ) {
             Box(
                 Modifier
@@ -348,17 +348,24 @@ fun BoxScope.MosqueBottomSheet(
             )
             Box(Modifier.height(8.dp))
             if (selected == null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        val mCount = sorted.count { it.first.category == "Moschee" }
-                        val oCount = sorted.size - mCount
-                        Txt(
-                            status ?: if (sorted.isEmpty()) t("none_loaded") else t("n_places", sorted.size),
-                            18, FontWeight.Bold, maxLines = 1
-                        )
-                        if (expanded) Txt(t("count_split", mCount, oCount), 13, color = p.sub, maxLines = 1)
+                // mittig, ruhig und elegant: beim Laden ein feiner Ladekreis, danach Anzahl und Aufteilung
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    val mCount = sorted.count { it.first.category == "Moschee" }
+                    val oCount = sorted.size - mCount
+                    if (status == t("loading_mosques")) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(15.dp), color = p.sub, strokeWidth = 2.dp, trackColor = p.line
+                            )
+                            Spacer(Modifier.width(9.dp))
+                            Txt(t("loading_mosques"), 15, FontWeight.Medium, p.sub, maxLines = 1)
+                        }
+                    } else if (status != null || sorted.isEmpty()) {
+                        Txt(status ?: t("none_loaded"), 15, FontWeight.Medium, p.sub, maxLines = 1, align = TextAlign.Center)
+                    } else {
+                        Txt(t("n_places", sorted.size), 16, FontWeight.SemiBold, maxLines = 1, align = TextAlign.Center)
+                        Txt(t("count_split", mCount, oCount), 13, color = p.sub, maxLines = 1, align = TextAlign.Center)
                     }
-                    Chevron(expanded)
                 }
             } else {
                 // Kopf: Symbol · Name · Art und Entfernung · (hochgezogen: Stern „Meine Moschee“) · Schließen
