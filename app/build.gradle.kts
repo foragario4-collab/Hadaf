@@ -12,20 +12,24 @@ android {
         applicationId = "com.gebetszeiten.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 55
-        versionName = "6.1.5"
+        versionCode = 56
+        versionName = "6.2"
         // Nummer des GitHub-Builds (für das In-App-Update)
         buildConfigField("int", "BUILD_RUN", System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
 
     signingConfigs {
         create("fest") {
-            // Bevorzugt aus GitHub-Secrets (Umgebungsvariablen), sonst die Datei im Projekt
-            val envStore = System.getenv("SIGNING_STORE_FILE")?.takeIf { it.isNotBlank() }
-            storeFile = if (envStore != null && file(envStore).exists()) file(envStore) else file("gebetszeiten.keystore")
-            storePassword = System.getenv("SIGNING_STORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "gebetszeiten"
+            // Nur der private Schlüssel aus den GitHub-Secrets – kein Ersatz-Schlüssel im Projekt.
+            // Fehlt er, bricht der Build ab, statt mit einem unsicheren Schlüssel zu signieren.
+            val envStore = System.getenv("SIGNING_STORE_FILE")?.takeIf { it.isNotBlank() && file(it).exists() }
+                ?: throw GradleException("Signierschlüssel fehlt: GitHub-Secret SIGNING_KEYSTORE_B64 eintragen")
+            storeFile = file(envStore)
+            storePassword = System.getenv("SIGNING_STORE_PASSWORD")?.takeIf { it.isNotBlank() }
+                ?: throw GradleException("GitHub-Secret SIGNING_STORE_PASSWORD fehlt")
             keyAlias = "gebetszeiten"
-            keyPassword = System.getenv("SIGNING_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "gebetszeiten"
+            keyPassword = System.getenv("SIGNING_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+                ?: throw GradleException("GitHub-Secret SIGNING_KEY_PASSWORD fehlt")
         }
     }
 
