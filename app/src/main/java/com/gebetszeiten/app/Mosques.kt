@@ -989,7 +989,12 @@ object Mosques {
 
     /** Liest „Label hh mm Iqâma hh mm“-Folgen aus dem Seitentext. */
     private fun parseTimes(text: String): Pair<Map<String, String>, Map<String, String>> {
-        val tok = text.split(' ').filter { it.isNotBlank() }
+        // Wörter und Zahlen trennen, die ohne Leerzeichen aneinander stehen (MasjidBox: „Iqâma6:27“, „00Stunden“).
+        // Nur bei mindestens zwei Buchstaben, damit „13h30“ als Uhrzeit erhalten bleibt.
+        val sep = text
+            .replace(Regex("(?<=\\p{L}\\p{L})(?=\\d)"), " ")
+            .replace(Regex("(?<=\\d)(?=\\p{L}\\p{L})"), " ")
+        val tok = sep.split(' ').filter { it.isNotBlank() }
         val adhan = LinkedHashMap<String, String>()
         val iq = LinkedHashMap<String, String>()
         fun timeAt(i: Int): Pair<String, Int>? {
@@ -1192,7 +1197,11 @@ object Mosques {
         val (a1, i1) = parseTimes(strip(html))
         val (a2, i2) = jsonTimes(html)
         val a3 = eventTimes(html)
-        val adhan = LinkedHashMap(a3).apply { putAll(a2); putAll(a1) }
+        // Rückfall: die Kurzbeschreibung der Seite („Gebetszeiten heute: Fadjr 05:42 · Duhr 11:46 …“)
+        val meta = Regex("(?is)<meta[^>]+(?:name|property)=[\"'](?:og:)?description[\"'][^>]*content=[\"'](.*?)[\"']").find(html)
+            ?.groupValues?.get(1)?.let { decode(it).replace('·', ' ') } ?: ""
+        val a4 = if (meta.isNotBlank()) parseTimes(meta).first else emptyMap()
+        val adhan = LinkedHashMap(a4).apply { putAll(a3); putAll(a2); putAll(a1) }
         val iq = LinkedHashMap(i2).apply { putAll(i1) }
         if (adhan.isEmpty() && iq.isEmpty()) lastFetchInfo += ", keine Zeiten erkannt"
         return Draft(name, addr, null, null, if (u.contains("masjidbox", true)) "MasjidBox" else "Webseite", u, adhan, iq)
