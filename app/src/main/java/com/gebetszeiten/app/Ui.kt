@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -147,28 +148,35 @@ fun LargeTitle(text: String) {
 @Composable
 fun Section(title: String, footer: String? = null, content: @Composable ColumnScope.() -> Unit) {
     val p = LocalPal.current
-    Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-        Txt(title.uppercase(), 13, color = p.sub, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
+    Column(Modifier.fillMaxWidth().padding(bottom = 22.dp)) {
+        if (title.isNotEmpty()) {
+            Text(
+                title.uppercase(), color = p.sub, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.6.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 7.dp)
+            )
+        }
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.card),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(p.card),
             content = content
         )
         if (footer != null) {
-            Txt(footer, 12, color = p.sub, modifier = Modifier.padding(start = 16.dp, top = 6.dp, end = 16.dp))
+            Txt(footer, 13, color = p.sub, modifier = Modifier.padding(start = 16.dp, top = 7.dp, end = 16.dp))
         }
     }
 }
 
 @Composable
-fun RowBase(first: Boolean, onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
+fun RowBase(first: Boolean, onClick: (() -> Unit)? = null, inset: Dp = 16.dp, content: @Composable RowScope.() -> Unit) {
     val p = LocalPal.current
     Column(Modifier.fillMaxWidth()) {
-        if (!first) Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(0.5.dp).background(p.line))
+        // Trennlinie beginnt bündig mit dem Text (bei Symbolen erst nach dem Symbol)
+        if (!first) Box(Modifier.padding(start = inset).fillMaxWidth().height(0.5.dp).background(p.line))
         val m = Modifier.fillMaxWidth()
         Row(
             (if (onClick != null) m.tap(scale = 0.985f, onClick = onClick) else m)
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 16.dp, vertical = 6.dp),
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 16.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             content = content
@@ -179,8 +187,8 @@ fun RowBase(first: Boolean, onClick: (() -> Unit)? = null, content: @Composable 
 @Composable
 fun RowScope.LabelCol(label: String, sub: String? = null) {
     Column(Modifier.weight(1f)) {
-        Txt(label, 16)
-        if (!sub.isNullOrEmpty()) Txt(sub, 12, color = LocalPal.current.sub)
+        Txt(label, 17, FontWeight.Normal)
+        if (!sub.isNullOrEmpty()) Txt(sub, 13, color = LocalPal.current.sub, modifier = Modifier.padding(top = 1.dp))
     }
 }
 
@@ -218,15 +226,15 @@ fun ValueRow(label: String, value: String, first: Boolean = false, sub: String? 
     val p = LocalPal.current
     RowBase(first, onClick) {
         LabelCol(label, sub)
-        Txt(value, 16, color = p.sub, maxLines = 1, modifier = Modifier.widthIn(max = 190.dp))
-        Txt("›", 22, color = p.line)
+        Txt(value, 16, color = p.sub, maxLines = 1, modifier = Modifier.widthIn(max = 170.dp))
+        RowChevron()
     }
 }
 
 @Composable
 fun ButtonRow(label: String, first: Boolean = false, color: Color? = null, onClick: () -> Unit) {
     RowBase(first, onClick) {
-        Txt(label, 16, color = color ?: LocalPal.current.accentText)
+        Txt(label, 17, color = color ?: LocalPal.current.accentText)
     }
 }
 
@@ -235,7 +243,7 @@ fun StepperRow(label: String, value: String, first: Boolean = false, onMinus: ()
     val p = LocalPal.current
     RowBase(first) {
         LabelCol(label)
-        Txt(value, 15, color = p.sub, align = TextAlign.End, modifier = Modifier.width(64.dp))
+        Txt(value, 16, color = p.sub, align = TextAlign.End, maxLines = 1, modifier = Modifier.width(70.dp))
         Row(Modifier.clip(RoundedCornerShape(8.dp)).background(p.fill)) {
             Box(Modifier.size(46.dp, 32.dp).tap(onClick = onMinus), contentAlignment = Alignment.Center) {
                 Txt("−", 20)
@@ -262,7 +270,7 @@ fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
                     .padding(horizontal = 14.dp, vertical = 7.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Txt(o, 13, if (i == selected) FontWeight.SemiBold else FontWeight.Normal)
+                Txt(o, 14, if (i == selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
             }
         }
     }
@@ -278,7 +286,7 @@ fun SegRow(label: String, options: List<String>, selected: Int, first: Boolean =
 
 /** Grüner Haken wie bei Apple. */
 @Composable
-fun GreenCheck(visible: Boolean = true) {
+fun GreenCheck(visible: Boolean = true, color: Color = Color(0xFF34C759)) {
     Canvas(Modifier.size(20.dp)) {
         if (!visible) return@Canvas
         val w = size.width
@@ -287,7 +295,7 @@ fun GreenCheck(visible: Boolean = true) {
             lineTo(w * 0.38f, w * 0.73f)
             lineTo(w * 0.83f, w * 0.27f)
         }
-        drawPath(path, Color(0xFF34C759), style = Stroke(width = w * 0.13f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawPath(path, color, style = Stroke(width = w * 0.13f, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
@@ -295,7 +303,7 @@ fun GreenCheck(visible: Boolean = true) {
 fun CheckRow(label: String, checked: Boolean, first: Boolean = false, sub: String? = null, onClick: () -> Unit) {
     RowBase(first, onClick) {
         LabelCol(label, sub)
-        GreenCheck(checked)
+        GreenCheck(checked, accentBlue(LocalPal.current))
     }
 }
 
@@ -323,10 +331,30 @@ fun ChoiceDialog(c: Choice, onDismiss: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Txt(o, 16, modifier = Modifier.weight(1f))
-                    GreenCheck(i == c.selected)
+                    GreenCheck(i == c.selected, accentBlue(p))
                 }
             }
             Spacer(Modifier.height(4.dp))
         }
+    }
+}
+
+
+/** Systemblau wie bei iOS, im Dunkeln etwas heller. */
+fun accentBlue(p: Pal) = if (p.dark) Color(0xFF0A84FF) else Color(0xFF007AFF)
+
+/** Kleiner grauer Pfeil am Zeilenende (bei Rechts-nach-links-Sprachen gespiegelt). */
+@Composable
+fun RowChevron() {
+    val c = if (LocalPal.current.dark) Color(0xFF5A5A5E) else Color(0xFFC4C4C7)
+    val rtl = Prefs.lang.rtl
+    Canvas(Modifier.size(9.dp, 15.dp)) {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply {
+            if (rtl) { moveTo(w * 0.83f, h * 0.1f); lineTo(w * 0.17f, h * 0.5f); lineTo(w * 0.83f, h * 0.9f) }
+            else { moveTo(w * 0.17f, h * 0.1f); lineTo(w * 0.83f, h * 0.5f); lineTo(w * 0.17f, h * 0.9f) }
+        }
+        drawPath(path, c, style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }

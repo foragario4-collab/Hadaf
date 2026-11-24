@@ -513,3 +513,19 @@ ph_hours	Öffnungszeiten	Opening hours	Açılış saatleri	Radno vrijeme	Radno v
 ph_board	Gebetszeiten-Aushang	Prayer times board	Namaz vakitleri panosu	Tabla s vaktijom	Tabla s vaktijom	Tabela e kohëve	Affiche des horaires	Расписание молитв	Ламазан хенийн у	礼拜时间表	لوحة أوقات الصلاة
 ph_other	Sonstiges	Other	Diğer	Ostalo	Ostalo	Tjetër	Autre	Другое	Кхин	其他	أخرى
 ph_delete	Foto löschen	Delete photo	Fotoğrafı sil	Obriši sliku	Obriši sliku	Fshi foton	Supprimer la photo	Удалить фото	Сурт дӀадаккха	删除照片	حذف الصورة
+grp_times	Gebetszeiten	Prayer times	Namaz vakitleri	Vaktovi namaza	Vremena namaza	Kohët e namazit	Horaires de prière	Время намаза	Ламазан хенаш	礼拜时间	أوقات الصلاة
+grp_mosques	Moscheen	Mosques	Camiler	Džamije	Džamije	Xhamitë	Mosquées	Мечети	Маьждигаш	清真寺	المساجد
+grp_more	Weiteres	More	Diğer	Ostalo	Ostalo	Të tjera	Autres	Прочее	Кхин	更多	المزيد
+st_prayers	Gebete und Erinnerung	Prayers and reminder	Namazlar ve hatırlatma	Namazi i podsjetnik	Namazi i podsetnik	Namazet dhe kujtesa	Prières et rappel	Намазы и напоминание	Ламазаш а дагадаккхар	礼拜与提醒	الصلوات والتذكير
+st_sound	Ton und Adhan	Sound and adhan	Ses ve ezan	Zvuk i ezan	Zvuk i ezan	Tingulli dhe ezani	Son et adhan	Звук и азан	Аз а азан	声音与宣礼	الصوت والأذان
+st_look	Design und Himmel	Design and sky	Tasarım ve gökyüzü	Dizajn i nebo	Dizajn i nebo	Dizajni dhe qielli	Apparence et ciel	Оформление и небо	Кеп а стигал	外观与天空	التصميم والسماء
+st_radar	Moschee-Radar	Mosque radar	Cami radarı	Radar džamija	Radar džamija	Radari i xhamive	Radar des mosquées	Радар мечетей	Маьждигийн радар	清真寺雷达	رادار المساجد
+st_diag	Diagnose und Test	Diagnostics and test	Tanılama ve test	Dijagnostika i test	Dijagnostika i test	Diagnostikimi dhe testi	Diagnostic et test	Диагностика и тест	Диагностика а талла	诊断与测试	التشخيص والاختبار
+st_auto	Automatisch per GPS	Automatic via GPS	GPS ile otomatik	Automatski putem GPS-a	Automatski preko GPS-a	Automatik me GPS	Automatique par GPS	Автоматически по GPS	GPS-ца ша	通过 GPS 自动	تلقائي عبر GPS
+st_manual	Fest gewählt	Set manually	Elle seçildi	Ručno odabrano	Ručno izabrano	Zgjedhur me dorë	Choisi manuellement	Выбрано вручную	Куьйга харжина	手动选择	محدد يدويًا
+st_offsets_sub	Minuten je Gebet anpassen	Adjust minutes per prayer	Namaz başına dakika ayarı	Minute po namazu	Minute po namazu	Minuta për çdo namaz	Minutes par prière	Минуты для каждого намаза	Хӏора ламазана минуташ	按礼拜调整分钟	تعديل الدقائق لكل صلاة
+st_all_ok	Alles in Ordnung	All good	Her şey yolunda	Sve u redu	Sve u redu	Gjithçka në rregull	Tout est en ordre	Всё в порядке	Массо дика ду	一切正常	كل شيء على ما يرام
+st_check	Bitte prüfen	Please check	Lütfen kontrol et	Molimo provjeri	Molimo proveri	Ju lutem kontrolloni	À vérifier	Проверьте	Хьажа деза	请检查	يرجى التحقق
+st_new	Neue Version verfügbar	New version available	Yeni sürüm var	Nova verzija dostupna	Nova verzija dostupna	Version e re në dispozicion	Nouvelle version disponible	Доступна новая версия	Керла верси ю	有新版本	يتوفر إصدار جديد
+st_current	aktuell	up to date	güncel	ažurno	ažurno	e përditësuar	à jour	актуально	керла ю	已是最新	محدّث
+st_on	Ein	On	Açık	Uklj.	Uklj.	Ndezur	Activé	Вкл	Латийна	开	تشغيل
