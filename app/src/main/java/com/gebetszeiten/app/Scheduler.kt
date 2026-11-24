@@ -26,8 +26,9 @@ object Scheduler {
             val mode = Prefs.mode(ev.kind)
             if (mode > 0) {
                 out.add(Action(ev.at, Act.PRAYER, ev))
-                if (ev.kind.prayer && Prefs.reminder > 0) {
-                    out.add(Action(ev.at - Prefs.reminder * 60_000L, Act.REMINDER, ev))
+                val rem = Prefs.reminderFor(ev.kind)
+                if (rem > 0) {
+                    out.add(Action(ev.at - rem * 60_000L, Act.REMINDER, ev))
                 }
             }
             // Live-Countdown: normal X Min vorher. Nach Isha bis Mitternacht, nach Mitternacht bis Fajr.

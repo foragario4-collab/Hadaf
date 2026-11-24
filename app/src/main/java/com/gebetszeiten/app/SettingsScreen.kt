@@ -640,6 +640,7 @@ private object Sg {
     const val WRENCH = "M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"
     const val PIN = "M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11zM12 8a2 2 0 1 0 0 4a2 2 0 1 0 0-4z"
     const val BACK = "M15 5l-7 7 7 7"
+    const val STAR = "M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"
     const val BACK_RTL = "M9 5l7 7-7 7"
 }
 
@@ -804,6 +805,15 @@ private fun Overview(onBack: () -> Unit, updNewer: Boolean, open: (String) -> Un
             val hiddenN = Prefs.hiddenIds.size
             Section(t("grp_mosques")) {
                 NavRow(Sg.RADAR, Color(0xFF13917C), t("st_radar"), Mosques.fmtDist(Prefs.radarRadius.toFloat()), true) { open("radar") }
+                // Karte „Meine Moschee“ auf „Heute“ ein-/ausblenden – direkt hier umschaltbar
+                RowBase(false, inset = 61.dp) {
+                    Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF34C759)), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        GlyphIcon(Sg.STAR, Color.White, 19.dp)
+                    }
+                    Spacer(Modifier.width(3.dp))
+                    Txt(t("show_fav"), 17, maxLines = 2, modifier = Modifier.weight(1f))
+                    IosSwitch(Prefs.showFav) { Prefs.showFav = it }
+                }
                 if (hiddenN > 0) NavRow(Sg.HIDE, Color(0xFF8E8E93), t("hidden_places"), "$hiddenN", false) { open("hidden") }
             }
 

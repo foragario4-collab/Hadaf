@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.withStyle
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import kotlin.math.roundToInt
@@ -159,7 +161,9 @@ fun BoxScope.MosqueBottomSheet(
     val peekPx = with(density) { peekDp.toPx() }
     val listMaxPx = maxOf(peekPx + 1f, if (parentPx > 0f) parentPx * 0.86f else with(density) { 420.dp.toPx() })
     // Moschee angetippt: halb offen (Route + Zeiten) oder ganz hochgezogen (alles auf einem Bildschirm)
-    val fullPx = maxOf(peekPx + 1f, if (parentPx > 0f) parentPx - with(density) { 6.dp.toPx() } else with(density) { 640.dp.toPx() })
+    // ganz oben bleibt die Statusleiste frei (sonst lag die Route unter Uhrzeit und Akku)
+    val topInset = WindowInsets.statusBars.getTop(density).toFloat()
+    val fullPx = maxOf(peekPx + 1f, if (parentPx > 0f) parentPx - topInset - with(density) { 8.dp.toPx() } else with(density) { 640.dp.toPx() })
     // Halb offen ist genau so hoch wie Kopf + Inhalt der halben Ansicht – kein leerer Platz darunter
     var headerPx by remember { mutableFloatStateOf(0f) }
     var halfPx by remember(selected?.id) { mutableFloatStateOf(0f) }
@@ -173,20 +177,23 @@ fun BoxScope.MosqueBottomSheet(
     )
     val maxPx = if (selected != null) fullPx else listMaxPx
     val h = remember { Animatable(peekPx) }
-    val full = selected != null && h.value > (midPx + fullPx) / 2f
+    // wantMid: das Blatt soll eingeklappt sein (Route + Zeiten). Erst wenn man selbst hochzieht, wird es „ganz“.
+    // So zeigt eine Moschee aus der hochgezogenen Liste nie kurz oder dauerhaft die ausgeklappte Ansicht.
+    var wantMid by remember { mutableStateOf(false) }
+    val full = selected != null && !wantMid && h.value > (midPx + fullPx) / 2f
 
-    // Beim Antippen einer Moschee: Blatt halb hoch (Route und Zeiten im Blick); passt sich der gemessenen Höhe an
-    // Moschee angetippt (auch aus der hochgezogenen Liste): immer zuerst eingeklappt – Route und Zeiten
+    // Moschee angetippt (auch aus der hochgezogenen Liste): immer zuerst eingeklappt
     LaunchedEffect(selected?.id) {
         if (selected != null) {
-            h.animateTo(midPx, spring(dampingRatio = 0.85f, stiffness = 380f))
-        } else if (h.value > listMaxPx) {
-            h.animateTo(listMaxPx, spring(dampingRatio = 0.85f))
+            wantMid = true
+        } else {
+            wantMid = false
+            if (h.value > listMaxPx) h.animateTo(listMaxPx, spring(dampingRatio = 0.85f))
         }
     }
-    // Höhe des Inhalts gemessen oder geändert: eingeklappte Höhe nachführen (nicht, wenn ganz hochgezogen)
-    LaunchedEffect(midPx) {
-        if (selected != null && !full && !h.isRunning) h.animateTo(midPx, spring(dampingRatio = 0.85f, stiffness = 380f))
+    // Ziel folgt der gemessenen Höhe: ändert sie sich während der Bewegung, wird einfach neu angesteuert
+    LaunchedEffect(wantMid, midPx, selected?.id) {
+        if (selected != null && wantMid) h.animateTo(midPx, spring(dampingRatio = 0.85f, stiffness = 380f))
     }
 
     /** Einrasten nach dem Ziehen – vom Kopf aus oder aus dem Inhalt heraus (velocity > 0 = nach unten). */
@@ -197,10 +204,10 @@ fun BoxScope.MosqueBottomSheet(
             when {
                 velocity > 1400f && v < midPx -> onClose()
                 v < midPx - with(density) { 110.dp.toPx() } -> onClose()
-                velocity < -600f -> h.animateTo(fullPx, spring(dampingRatio = 0.85f))
-                velocity > 600f -> h.animateTo(midPx, spring(dampingRatio = 0.85f))
-                v > (midPx + fullPx) / 2f -> h.animateTo(fullPx, spring(dampingRatio = 0.85f))
-                else -> h.animateTo(midPx, spring(dampingRatio = 0.85f))
+                velocity < -600f -> { wantMid = false; h.animateTo(fullPx, spring(dampingRatio = 0.85f)) }
+                velocity > 600f -> wantMid = true
+                v > (midPx + fullPx) / 2f -> { wantMid = false; h.animateTo(fullPx, spring(dampingRatio = 0.85f)) }
+                else -> wantMid = true
             }
         } else {
             val target = when {
@@ -223,6 +230,7 @@ fun BoxScope.MosqueBottomSheet(
             private fun move(to: Float) {
                 cur = to
                 moved = true
+                wantMid = false
                 scope.launch { h.snapTo(to) }
             }
 
@@ -336,11 +344,16 @@ fun BoxScope.MosqueBottomSheet(
                 .draggable(
                     orientation = Orientation.Vertical,
                     state = rememberDraggableState { delta ->
+                        wantMid = false
                         scope.launch { h.snapTo((h.value - delta).coerceIn(peekPx, maxPx)) }
                     },
                     onDragStopped = { velocity -> settle(velocity) }
                 )
-                .tap { if (selected == null) toggle() else scope.launch { h.animateTo(if (full) midPx else fullPx, spring(dampingRatio = 0.85f)) } }
+                .tap {
+                    if (selected == null) toggle()
+                    else if (full) wantMid = true
+                    else { wantMid = false; scope.launch { h.animateTo(fullPx, spring(dampingRatio = 0.85f)) } }
+                }
                 .then(if (selected == null) Modifier.height(peekDp) else Modifier)
                 .padding(start = 16.dp, end = if (selected == null) 16.dp else 12.dp, top = 8.dp, bottom = 10.dp)
         ) {
@@ -452,7 +465,7 @@ fun BoxScope.MosqueBottomSheet(
                 }
             }
         } else if (selected != null) {
-            val expand = { scope.launch { h.animateTo(fullPx, spring(dampingRatio = 0.85f)) }; Unit }
+            val expand = { wantMid = false; scope.launch { h.animateTo(fullPx, spring(dampingRatio = 0.85f)) }; Unit }
             val place = remember(selected.id, now / 60_000L) { Places.get(ctx, selected.id) }
             if (place != null) {
                 PlaceDetailNew(place, selected, now, lat, lng, routeSec[selected.id], full, expand, onHalfHeight = { halfPx = it }) {

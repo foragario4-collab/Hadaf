@@ -80,13 +80,24 @@ object Prefs {
     fun setOffset(k: Kind, v: Int) = edit { putInt("off_${k.name}", v) }
 
     /** 0 = aus, 1 = Mitteilung mit Ton, 2 = Adhan */
-    fun mode(k: Kind): Int =
-        if (k == Kind.MIDNIGHT) 0 else sp.getInt("mode_${k.name}", if (k.prayer) 1 else 0)
+    fun mode(k: Kind): Int = sp.getInt("mode_${k.name}", if (k.prayer) 1 else 0)
     fun setMode(k: Kind, v: Int) = edit { putInt("mode_${k.name}", v) }
+
+    /** „Meine Moschee“-Karte auf „Heute“ zeigen */
+    var showFav: Boolean
+        get() = sp.getBoolean("showFav", true)
+        set(v) = edit { putBoolean("showFav", v) }
 
     var reminder: Int
         get() = sp.getInt("reminder", 15)
         set(v) = edit { putInt("reminder", v) }
+
+    /** Eigene Erinnerung nur für dieses Gebet (Minuten, 0 = aus) oder -1 = wie bei allen. */
+    fun reminderOwn(k: Kind): Int = sp.getInt("rem_${k.name}", -1)
+    fun setReminderOwn(k: Kind, v: Int) = edit { if (v < 0) remove("rem_${k.name}") else putInt("rem_${k.name}", v) }
+
+    /** Erinnerung, die für dieses Gebet wirklich gilt. Die allgemeine Erinnerung gilt nur für die 5 Gebete. */
+    fun reminderFor(k: Kind): Int = reminderOwn(k).let { if (it >= 0) it else if (k.prayer) reminder else 0 }
     var live: Boolean
         get() = sp.getBoolean("live", true)
         set(v) = edit { putBoolean("live", v) }

@@ -430,7 +430,7 @@ internal fun MosqueDetailNew(
                 busy = false
                 when {
                     res == null -> info = t("page_failed") + Mosques.friendlyInfo()
-                    res.adhan.isEmpty() && res.iqamah.isEmpty() -> info = t("no_times_found") + Mosques.friendlyInfo()
+                    res.adhan.isEmpty() && res.iqamah.isEmpty() -> info = t("no_times_found")
                     else -> preview = res
                 }
             }

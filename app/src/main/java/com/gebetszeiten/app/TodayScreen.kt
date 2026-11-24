@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.unit.sp
@@ -128,7 +129,7 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
         Mosques.distance(Prefs.lat, Prefs.lng, Prefs.lastGpsLat, Prefs.lastGpsLng) > 50_000f
     // Glasflächen, die gerade nicht sichtbar sind, aus dem Unschärfe-Bereich entfernen
     androidx.compose.runtime.SideEffect {
-        val keep = buildSet { add("list"); add("datepill"); if (isToday) add("fav"); if (awayShown) add("away") }
+        val keep = buildSet { add("list"); add("datepill"); if (isToday && Prefs.showFav) add("fav"); if (awayShown) add("away") }
         reg.rects.keys.retainAll(keep)
     }
     Box(Modifier.fillMaxSize().onGloballyPositioned { reg.origin = it.positionInRoot() }) {
@@ -141,13 +142,30 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
             ) {
                 // Passt nicht alles auf den Bildschirm (viele Zeilen, Moschee-Karte, Hinweis), wird es Stufe für Stufe
                 // kompakter – nie rutscht etwas unter die Tab-Leiste und nie muss man scrollen
-                // beide Ränder merken; egal welcher Rückruf zuerst kommt, geprüft wird bei jedem
-                var fit by remember(maxHeight, list.size, awayShown, Prefs.favId, isToday) { mutableIntStateOf(0) }
-                val edges = remember(maxHeight, list.size, awayShown, Prefs.favId, isToday) { IntArray(2) { Int.MAX_VALUE } }  // [0] unterer Rand Platz, [1] unterer Rand Liste
-                val check: () -> Unit = { if (edges[1] != Int.MAX_VALUE && edges[1] > edges[0] + 1 && fit < 2) fit += 1 }
+                // Gemessen wird laufend: ragt die Liste unten heraus → eine Stufe kleiner; ist wieder genug Platz frei
+                // (leere Flächen über und unter dem Countdown) → zurück zur normalen Größe. Kurz warten, damit
+                // nachladende Teile (Wetter, Moschee-Karte) nicht zu einem falschen Verkleinern führen.
+                val dens = androidx.compose.ui.platform.LocalDensity.current
+                var fit by remember(maxHeight) { mutableIntStateOf(0) }
+                var boxBottom by remember { mutableIntStateOf(0) }
+                var listBottom by remember { mutableIntStateOf(0) }
+                var gapA by remember { mutableIntStateOf(0) }
+                var gapB by remember { mutableIntStateOf(0) }
+                val rowsN = list.size
+                LaunchedEffect(fit, boxBottom, listBottom, gapA + gapB, rowsN) {
+                    if (boxBottom == 0 || listBottom == 0) return@LaunchedEffect
+                    kotlinx.coroutines.delay(300)
+                    if (listBottom > boxBottom + 1) {
+                        if (fit < 2) fit += 1
+                    } else if (fit > 0) {
+                        // so viel Platz braucht die nächstgrößere Stufe zusätzlich (Zeilen + Countdown + Kopf)
+                        val need = with(dens) { (if (fit == 2) rowsN * 5 + 20 else rowsN * 8 + 46).dp.toPx() + 24.dp.toPx() }
+                        if (gapA + gapB > need) fit -= 1
+                    }
+                }
                 val small = maxHeight < 700.dp || fit >= 1
                 val tiny = fit >= 2
-                Column(Modifier.fillMaxSize().onGloballyPositioned { c -> edges[0] = (c.positionInRoot().y + c.size.height).toInt(); check() }) {
+                Column(Modifier.fillMaxSize().onGloballyPositioned { c -> boxBottom = (c.positionInRoot().y + c.size.height).toInt() }) {
                     // Kopf: alles mittig – Ort, Wetter und Datum in einer Glas-Kapsel mit Pfeilen für die Tage
                     val ts = { size: Int, w: FontWeight -> androidx.compose.ui.text.TextStyle(fontSize = size.sp, fontWeight = w, shadow = shadow) }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -217,7 +235,7 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                             PillChevron(Glyph.CHEV_R) { offset++ }
                         }
                     }
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.weight(1f).onSizeChanged { gapA = it.height })
                     // Mitte: nächstes Gebet groß (heute) bzw. Titel des gewählten Tages
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         if (isToday) {
@@ -233,7 +251,7 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                             androidx.compose.material3.Text(title, color = fg, style = ts(if (small) 30 else 36, FontWeight.Bold), maxLines = 1)
                         }
                     }
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.weight(1f).onSizeChanged { gapB = it.height })
                     // Hinweis: weit weg vom eingestellten Ort
                     if (awayShown) {
                         Row(
@@ -251,7 +269,7 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                         Spacer(Modifier.height(8.dp))
                     }
                     // Meine Moschee (kompakt)
-                    if (isToday) {
+                    if (isToday && Prefs.showFav) {
                         Box(Modifier.fillMaxWidth().glass(reg, "fav", 18.dp, tint)) { MyMosqueCard(now, v, onOpenMap) }
                         Spacer(Modifier.height(8.dp))
                     }
@@ -262,7 +280,7 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                             .wrapContentHeight(Alignment.Top, unbounded = true)
                             .onGloballyPositioned { c ->
                                 // unterer Rand der Liste unter dem verfügbaren Platz? → eine Stufe kompakter
-                                edges[1] = (c.positionInRoot().y + c.size.height).toInt(); check()
+                                listBottom = (c.positionInRoot().y + c.size.height).toInt()
                             }
                             .glass(reg, "list", 24.dp, tint)
                     ) {

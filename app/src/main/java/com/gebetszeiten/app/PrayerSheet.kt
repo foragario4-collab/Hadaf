@@ -110,7 +110,9 @@ internal fun PrayerSheet(e: Ev, now: Long, nextAt: Long?, onClose: () -> Unit, o
 
     var mode by remember(e.kind) { mutableIntStateOf(Prefs.mode(e.kind)) }
     var offset by remember(e.kind) { mutableIntStateOf(Prefs.offset(e.kind)) }
-    var reminder by remember { mutableIntStateOf(Prefs.reminder) }
+    // Erinnerung: entweder wie bei allen Gebeten oder nur für dieses (bei Sonnenaufgang, Mitternacht usw. immer nur dieses)
+    var onlyThis by remember(e.kind) { mutableStateOf(!e.kind.prayer || Prefs.reminderOwn(e.kind) >= 0) }
+    var reminder by remember(e.kind) { mutableIntStateOf(Prefs.reminderFor(e.kind)) }
     var tone by remember { mutableStateOf(Prefs.tone) }
     var adhanName by remember(e.kind) {
         mutableStateOf(if (e.kind == Kind.FAJR) Prefs.fajrAdhanName ?: Prefs.adhanName else Prefs.adhanName)
@@ -154,11 +156,8 @@ internal fun PrayerSheet(e: Ev, now: Long, nextAt: Long?, onClose: () -> Unit, o
         onChanged()
     }
 
-    val maxMode = when {
-        e.kind == Kind.MIDNIGHT -> -1
-        e.kind.prayer -> 2
-        else -> 1
-    }
+    // Gebete: Aus · Ton · Adhan. Sonnenaufgang, Mitternacht, Letztes Drittel: Aus · Ton
+    val maxMode = if (e.kind.prayer) 2 else 1
 
     // liegt über der ganzen App (SheetHost) – deckt Statusleiste und Tab-Leiste mit ab
     androidx.activity.compose.BackHandler { close() }
@@ -247,7 +246,7 @@ internal fun PrayerSheet(e: Ev, now: Long, nextAt: Long?, onClose: () -> Unit, o
 
                 // Einstellungen
                 val showOffset = e.kind in OFFSET_KINDS
-                val showRem = e.kind.prayer && mode >= 1
+                val showRem = mode >= 1
                 if (mode >= 1 || showOffset) {
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.bg)) {
                         var first = true
@@ -293,7 +292,8 @@ internal fun PrayerSheet(e: Ev, now: Long, nextAt: Long?, onClose: () -> Unit, o
                             first = false
                             SheetRow(
                                 Pg.CLOCK, Color(0xFFFF9F0A), t("reminder_before"),
-                                (if (reminder == 0) t("mode_off") else t("min_short", reminder)) + " · " + t("ps_all"),
+                                (if (reminder == 0) t("mode_off") else t("min_short", reminder)) + " · " +
+                                    (if (onlyThis) t("ps_only", e.title) else t("ps_all")),
                                 chevron = true, open = openRem
                             ) { openRem = !openRem }
                             if (openRem) {
@@ -309,7 +309,7 @@ internal fun PrayerSheet(e: Ev, now: Long, nextAt: Long?, onClose: () -> Unit, o
                                                 .background(if (on) accent else p.card)
                                                 .tap(scale = 0.94f) {
                                                     reminder = r
-                                                    Prefs.reminder = r
+                                                    if (onlyThis) Prefs.setReminderOwn(e.kind, r) else Prefs.reminder = r
                                                     changed()
                                                 }.padding(horizontal = 14.dp),
                                             contentAlignment = Alignment.Center
@@ -318,6 +318,25 @@ internal fun PrayerSheet(e: Ev, now: Long, nextAt: Long?, onClose: () -> Unit, o
                                                 if (r == 0) t("mode_off") else t("min_short", r), 14, FontWeight.SemiBold,
                                                 if (on) Color.White else p.text, maxLines = 1
                                             )
+                                        }
+                                    }
+                                }
+                                if (e.kind.prayer) {
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(start = 54.dp, end = 14.dp, bottom = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Txt(t("ps_only_long", e.title), 15, modifier = Modifier.weight(1f), maxLines = 2)
+                                        Spacer(Modifier.width(10.dp))
+                                        IosSwitch(onlyThis) { on ->
+                                            onlyThis = on
+                                            if (on) {
+                                                Prefs.setReminderOwn(e.kind, reminder)
+                                            } else {
+                                                Prefs.setReminderOwn(e.kind, -1)
+                                                reminder = Prefs.reminder
+                                            }
+                                            changed()
                                         }
                                     }
                                 }
@@ -390,7 +409,7 @@ internal fun PrayerSheet(e: Ev, now: Long, nextAt: Long?, onClose: () -> Unit, o
 
                 if (maxMode >= 1) {
                     Txt(
-                        if (e.kind.prayer) t("ps_note", e.title) else t("ps_note_other", e.title),
+                        if (e.kind.prayer) t("ps_note2", e.title) else t("ps_note_other", e.title),
                         12, color = p.sub, align = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                     )
                 }
