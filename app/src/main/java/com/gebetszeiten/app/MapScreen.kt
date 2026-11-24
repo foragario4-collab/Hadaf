@@ -204,16 +204,28 @@ private fun setupStyle(ctx: Context, map: MapLibreMap, style: Style, mosques: Li
             PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM)
         )
     )
-    if (hasLocPermission(ctx)) {
-        try {
-            val lc = map.locationComponent
+    showMyDot(ctx, map, style, null)
+}
+
+/**
+ * Eigener Standortpunkt. Wird bei jedem neuen Standort aufgerufen: schaltet den Punkt ein, falls die
+ * Erlaubnis erst später kam, und setzt ihn sofort auf den Standort – auch wenn das GPS der Karte selbst
+ * (eigene Ortungsquelle) noch nichts geliefert hat. Sonst sprang die Karte hin, aber der Punkt fehlte.
+ */
+@android.annotation.SuppressLint("MissingPermission")
+private fun showMyDot(ctx: Context, map: MapLibreMap, style: Style, loc: android.location.Location?) {
+    if (!hasLocPermission(ctx) || !style.isFullyLoaded) return
+    try {
+        val lc = map.locationComponent
+        if (!lc.isLocationComponentActivated) {
             lc.activateLocationComponent(
                 LocationComponentActivationOptions.builder(ctx, style).useDefaultLocationEngine(true).build()
             )
-            lc.isLocationComponentEnabled = true
-            lc.renderMode = RenderMode.COMPASS
-        } catch (e: Exception) {
         }
+        if (!lc.isLocationComponentEnabled) lc.isLocationComponentEnabled = true
+        lc.renderMode = RenderMode.COMPASS
+        if (loc != null) lc.forceLocationUpdate(loc)
+    } catch (e: Exception) {
     }
 }
 
@@ -311,6 +323,14 @@ fun MapScreen(v: Int) {
         }
     }
 
+    // letzter eigener Standort – sobald Karte und Stil bereit sind, wird der Punkt dorthin gesetzt
+    var myFix by remember { mutableStateOf<android.location.Location?>(null) }
+    LaunchedEffect(myFix, styleRef, permOk) {
+        val m = mapRef ?: return@LaunchedEffect
+        val st = styleRef ?: return@LaunchedEffect
+        showMyDot(ctx, m, st, myFix)
+    }
+
     fun locate(animate: Boolean) {
         gpsOn = Loc.isOn(ctx)
         if (!gpsOn) {
@@ -324,6 +344,7 @@ fun MapScreen(v: Int) {
             if (loc != null) {
                 myLat = loc.latitude
                 myLng = loc.longitude
+                myFix = loc
                 Loc.applyFix(ctx, loc.latitude, loc.longitude)
                 if (animate) mapRef?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(myLat, myLng), 13.5))
             }
