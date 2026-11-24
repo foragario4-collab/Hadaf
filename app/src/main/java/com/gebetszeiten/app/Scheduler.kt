@@ -40,8 +40,11 @@ object Scheduler {
                 // Nach Fajr: Countdown bis Sonnenaufgang (Ende der Fajr-Zeit)
                 ev.kind == Kind.SUNRISE ->
                     evs.subList(0, idx).lastOrNull { it.kind == Kind.FAJR }?.at
-                ev.kind == Kind.FAJR ->
+                // Nach Mitternacht: Countdown bis zum letzten Drittel, danach bis Fajr
+                ev.kind == Kind.LAST_THIRD ->
                     evs.subList(0, idx).lastOrNull { it.kind == Kind.MIDNIGHT }?.at
+                ev.kind == Kind.FAJR ->
+                    evs.subList(0, idx).lastOrNull { it.kind == Kind.LAST_THIRD || it.kind == Kind.MIDNIGHT }?.at
                         ?: (ev.at - Prefs.liveMin * 60_000L)
                 // „Immer anzeigen“: ab dem vorherigen Gebet durchgehend
                 ev.kind.prayer && Prefs.liveAlways ->

@@ -1203,6 +1203,15 @@ object Mosques {
         val a4 = if (meta.isNotBlank()) parseTimes(meta).first else emptyMap()
         val adhan = LinkedHashMap(a4).apply { putAll(a3); putAll(a2); putAll(a1) }
         val iq = LinkedHashMap(i2).apply { putAll(i1) }
+        // Fehlt die Iqamah (oder alles), Seite wie ein Browser laden – viele Seiten bauen die Zeiten erst dort auf
+        if (iq.isEmpty() || adhan.size < 3) {
+            WebText.render(u)?.let { txt ->
+                val (a5, i5) = parseTimes(txt)
+                if (a5.size >= 3) adhan.putAll(a5)
+                i5.forEach { (k, v) -> iq[k] = v }
+                if (a5.isNotEmpty() || i5.isNotEmpty()) lastFetchInfo += ", Browser-Text"
+            }
+        }
         if (adhan.isEmpty() && iq.isEmpty()) lastFetchInfo += ", keine Zeiten erkannt"
         return Draft(name, addr, null, null, if (u.contains("masjidbox", true)) "MasjidBox" else "Webseite", u, adhan, iq)
     }

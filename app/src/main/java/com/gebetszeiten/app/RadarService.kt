@@ -142,7 +142,8 @@ class RadarService : Service(), LocationListener {
     private fun build(near: Pair<Mosque, Float>?): Notification {
         val now = System.currentTimeMillis()
         val evs = Times.around(now)
-        val chain = evs.filter { it.kind.prayer || it.kind == Kind.SUNRISE }
+        // Zeitfenster mit Balken: auch nachts Isha → Mitternacht → Letztes Drittel → Fajr
+        val chain = evs.filter { it.kind.prayer || it.kind == Kind.SUNRISE || it.kind == Kind.MIDNIGHT || it.kind == Kind.LAST_THIRD }
         val next = chain.firstOrNull { it.at > now } ?: nextPrayer()
         val prev = chain.lastOrNull { it.at <= now }
         val prevAt = prev?.at ?: (next.at - 3_600_000L)

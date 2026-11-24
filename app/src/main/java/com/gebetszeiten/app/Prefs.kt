@@ -25,6 +25,7 @@ object Prefs {
             store = ctx.applicationContext.getSharedPreferences("einstellungen", Context.MODE_PRIVATE)
         }
         I18n.init(ctx)
+        WebText.app = ctx.applicationContext
     }
 
     private fun edit(block: SharedPreferences.Editor.() -> Unit) {

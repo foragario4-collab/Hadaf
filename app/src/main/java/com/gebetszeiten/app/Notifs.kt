@@ -207,7 +207,8 @@ object Notifs {
         val minsLeft = ((ev.at - now + 59_999L) / 60_000L).coerceAtLeast(0)
         val isMid = ev.kind == Kind.MIDNIGHT
         val isSun = ev.kind == Kind.SUNRISE
-        val col = if (isMid) 0xFF5E5CE6.toInt() else ACCENT
+        val night = isMid || ev.kind == Kind.LAST_THIRD
+        val col = if (night) 0xFF5E5CE6.toInt() else ACCENT
         val b = Notification.Builder(ctx, CH_LIVE)
             .setSmallIcon(R.drawable.ic_live_dot)
             .setColor(col)
@@ -226,7 +227,7 @@ object Notifs {
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .addExtras(extras)
         val chip = chipText(ev, ev.at - now)
-        applyLiveStyle(b, done, chip, if (isMid) 0xFFA5A5FF.toInt() else if (isSun) 0xFFFFC94D.toInt() else 0xFF4FD6BC.toInt())
+        applyLiveStyle(b, done, chip, if (night) 0xFFA5A5FF.toInt() else if (isSun) 0xFFFFC94D.toInt() else 0xFF4FD6BC.toInt())
         return b.build()
     }
 
