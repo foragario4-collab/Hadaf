@@ -176,12 +176,17 @@ fun BoxScope.MosqueBottomSheet(
     val full = selected != null && h.value > (midPx + fullPx) / 2f
 
     // Beim Antippen einer Moschee: Blatt halb hoch (Route und Zeiten im Blick); passt sich der gemessenen Höhe an
-    LaunchedEffect(selected?.id, midPx) {
+    // Moschee angetippt (auch aus der hochgezogenen Liste): immer zuerst eingeklappt – Route und Zeiten
+    LaunchedEffect(selected?.id) {
         if (selected != null) {
-            if (!full) h.animateTo(midPx, spring(dampingRatio = 0.85f, stiffness = 380f))
+            h.animateTo(midPx, spring(dampingRatio = 0.85f, stiffness = 380f))
         } else if (h.value > listMaxPx) {
             h.animateTo(listMaxPx, spring(dampingRatio = 0.85f))
         }
+    }
+    // Höhe des Inhalts gemessen oder geändert: eingeklappte Höhe nachführen (nicht, wenn ganz hochgezogen)
+    LaunchedEffect(midPx) {
+        if (selected != null && !full && !h.isRunning) h.animateTo(midPx, spring(dampingRatio = 0.85f, stiffness = 380f))
     }
 
     /** Einrasten nach dem Ziehen – vom Kopf aus oder aus dem Inhalt heraus (velocity > 0 = nach unten). */

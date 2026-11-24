@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -138,8 +139,15 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                 Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 12.dp)
             ) {
-                val small = maxHeight < 700.dp
-                Column(Modifier.fillMaxSize()) {
+                // Passt nicht alles auf den Bildschirm (viele Zeilen, Moschee-Karte, Hinweis), wird es Stufe für Stufe
+                // kompakter – nie rutscht etwas unter die Tab-Leiste und nie muss man scrollen
+                // beide Ränder merken; egal welcher Rückruf zuerst kommt, geprüft wird bei jedem
+                var fit by remember(maxHeight, list.size, awayShown, Prefs.favId, isToday) { mutableIntStateOf(0) }
+                val edges = remember(maxHeight, list.size, awayShown, Prefs.favId, isToday) { IntArray(2) { Int.MAX_VALUE } }  // [0] unterer Rand Platz, [1] unterer Rand Liste
+                val check: () -> Unit = { if (edges[1] != Int.MAX_VALUE && edges[1] > edges[0] + 1 && fit < 2) fit += 1 }
+                val small = maxHeight < 700.dp || fit >= 1
+                val tiny = fit >= 2
+                Column(Modifier.fillMaxSize().onGloballyPositioned { c -> edges[0] = (c.positionInRoot().y + c.size.height).toInt(); check() }) {
                     // Kopf: alles mittig – Ort, Wetter und Datum in einer Glas-Kapsel mit Pfeilen für die Tage
                     val ts = { size: Int, w: FontWeight -> androidx.compose.ui.text.TextStyle(fontSize = size.sp, fontWeight = w, shadow = shadow) }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -214,8 +222,8 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         if (isToday) {
                             androidx.compose.material3.Text((if (next.kind.prayer) t("next_prayer_up") else t("next_up")).uppercase(), color = fg.copy(alpha = 0.9f), style = ts(13, FontWeight.SemiBold).copy(letterSpacing = 1.5.sp))
-                            androidx.compose.material3.Text(next.title, color = fg, style = ts(if (small) 32 else 40, FontWeight.Bold), maxLines = 1)
-                            androidx.compose.material3.Text(WidgetPainter.cd(next.at - now), color = fg, style = ts(if (small) 48 else 60, FontWeight.ExtraLight).copy(letterSpacing = (-2).sp), maxLines = 1)
+                            androidx.compose.material3.Text(next.title, color = fg, style = ts(if (tiny) 28 else if (small) 32 else 40, FontWeight.Bold), maxLines = 1)
+                            androidx.compose.material3.Text(WidgetPainter.cd(next.at - now), color = fg, style = ts(if (tiny) 40 else if (small) 48 else 60, FontWeight.ExtraLight).copy(letterSpacing = (-2).sp), maxLines = 1)
                             androidx.compose.material3.Text(if (next.day != today) t("hero_tomorrow", Fmt.time(next.at)) else t("at_time", Fmt.time(next.at)), color = fg.copy(alpha = 0.92f), style = ts(15, FontWeight.Normal))
                             Spacer(Modifier.height(8.dp))
                             Box(Modifier.width(170.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(fg.copy(alpha = 0.25f))) {
@@ -248,12 +256,21 @@ fun TodayScreen(v: Int, onSettings: () -> Unit = {}, onOpenMap: () -> Unit = {})
                         Spacer(Modifier.height(8.dp))
                     }
                     // Gebetszeiten auf Glas
-                    Column(Modifier.fillMaxWidth().glass(reg, "list", 24.dp, tint)) {
+                    Column(
+                        Modifier.fillMaxWidth()
+                            // volle Höhe messen, auch wenn die Spalte schon voll ist
+                            .wrapContentHeight(Alignment.Top, unbounded = true)
+                            .onGloballyPositioned { c ->
+                                // unterer Rand der Liste unter dem verfügbaren Platz? → eine Stufe kompakter
+                                edges[1] = (c.positionInRoot().y + c.size.height).toInt(); check()
+                            }
+                            .glass(reg, "list", 24.dp, tint)
+                    ) {
                         list.forEachIndexed { i, e ->
                             GlassPrayerRow(
                                 e, first = i == 0, isNext = isToday && e == next, past = isToday && e.at <= now,
                                 nextIn = if (isToday) nextOf(e)?.let { WidgetPainter.cd(it - now) } else null,
-                                soon = isToday && e.at > now, small = small
+                                soon = isToday && e.at > now, small = small, tiny = tiny
                             ) { sheetKind = e.kind }
                         }
                     }
@@ -343,7 +360,7 @@ private fun PrayerRow(ctx: Context, e: Ev, first: Boolean, isNext: Boolean, past
  * Antippen wechselt Aus → Ton → Adhan (kurze Bestätigung unten).
  */
 @Composable
-private fun GlassPrayerRow(e: Ev, first: Boolean, isNext: Boolean, past: Boolean, nextIn: String?, soon: Boolean, small: Boolean, onTap: () -> Unit) {
+private fun GlassPrayerRow(e: Ev, first: Boolean, isNext: Boolean, past: Boolean, nextIn: String?, soon: Boolean, small: Boolean, tiny: Boolean = false, onTap: () -> Unit) {
     val green = Color(0xFF7CF0C8)
     val alpha = if (past && !isNext) 0.55f else 1f
     Column(
@@ -353,7 +370,7 @@ private fun GlassPrayerRow(e: Ev, first: Boolean, isNext: Boolean, past: Boolean
     ) {
         if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.12f)))
         Row(
-            Modifier.fillMaxWidth().heightIn(min = if (small) 36.dp else 44.dp).padding(horizontal = 18.dp),
+            Modifier.fillMaxWidth().heightIn(min = if (tiny) 31.dp else if (small) 36.dp else 44.dp).padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
